@@ -13,7 +13,7 @@ const VOL_INDICES = [
     value: "Vol 10",
     basePrice: 1000,
     volatility: 0.00024,
-    tickMs: 1480,
+    tickMs: 2368,
     rhythm: [2100, 1800, 1200, 2200, 900],
   },
   {
@@ -21,7 +21,7 @@ const VOL_INDICES = [
     value: "Vol 25",
     basePrice: 1000,
     volatility: 0.00038,
-    tickMs: 1280,
+    tickMs: 2048,
     rhythm: [1800, 1300, 900, 1600, 520],
   },
   {
@@ -29,7 +29,7 @@ const VOL_INDICES = [
     value: "Vol 50",
     basePrice: 1000,
     volatility: 0.00058,
-    tickMs: 1080,
+    tickMs: 1728,
     rhythm: [1500, 880, 620, 1200, 420],
   },
   {
@@ -37,7 +37,7 @@ const VOL_INDICES = [
     value: "Vol 75",
     basePrice: 1000,
     volatility: 0.00078,
-    tickMs: 900,
+    tickMs: 1440,
     rhythm: [1200, 640, 420, 900, 320],
   },
   {
@@ -45,7 +45,7 @@ const VOL_INDICES = [
     value: "Vol 100",
     basePrice: 1000,
     volatility: 0.001,
-    tickMs: 760,
+    tickMs: 1216,
     rhythm: [980, 520, 360, 740, 260],
   },
   {
@@ -53,7 +53,7 @@ const VOL_INDICES = [
     value: "Vol 10 (1s)",
     basePrice: 1000,
     volatility: 0.00036,
-    tickMs: 260,
+    tickMs: 1280,
     rhythm: [2000, 1400, 650, 420, 250],
   },
   {
@@ -61,7 +61,7 @@ const VOL_INDICES = [
     value: "Vol 25 (1s)",
     basePrice: 1000,
     volatility: 0.00054,
-    tickMs: 220,
+    tickMs: 1280,
     rhythm: [1600, 900, 500, 300, 220],
   },
   {
@@ -69,7 +69,7 @@ const VOL_INDICES = [
     value: "Vol 50 (1s)",
     basePrice: 1000,
     volatility: 0.00072,
-    tickMs: 200,
+    tickMs: 1280,
     rhythm: [1300, 760, 440, 260, 190],
   },
   {
@@ -77,7 +77,7 @@ const VOL_INDICES = [
     value: "Vol 75 (1s)",
     basePrice: 1000,
     volatility: 0.00094,
-    tickMs: 180,
+    tickMs: 1280,
     rhythm: [1100, 620, 340, 220, 170],
   },
   {
@@ -85,7 +85,7 @@ const VOL_INDICES = [
     value: "Vol 100 (1s)",
     basePrice: 1000,
     volatility: 0.00115,
-    tickMs: 160,
+    tickMs: 1280,
     rhythm: [900, 500, 280, 190, 150],
   },
   {
@@ -93,7 +93,7 @@ const VOL_INDICES = [
     value: "Crash 500",
     basePrice: 500,
     volatility: 0.00066,
-    tickMs: 520,
+    tickMs: 832,
     rhythm: [1900, 1450, 900, 520, 760],
   },
   {
@@ -101,7 +101,7 @@ const VOL_INDICES = [
     value: "Boom 500",
     basePrice: 500,
     volatility: 0.00066,
-    tickMs: 520,
+    tickMs: 832,
     rhythm: [760, 520, 900, 1450, 1900],
   },
 ] as const;
