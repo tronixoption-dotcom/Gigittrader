@@ -9,8 +9,10 @@ function getProcessEnv(name: string): string | undefined {
 export function getSupabaseUrl() {
   return (
     import.meta.env.VITE_SUPABASE_URL ||
+    import.meta.env.VITE_SUPABASE_PROJECT_URL ||
     getProcessEnv("SUPABASE_URL") ||
     getProcessEnv("VITE_SUPABASE_URL") ||
+    getProcessEnv("VITE_SUPABASE_PROJECT_URL") ||
     FALLBACK_SUPABASE_URL
   );
 }
