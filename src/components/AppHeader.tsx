@@ -70,8 +70,8 @@ export function AppHeader() {
         <SheetContent side="left" className="w-72 bg-background border-border p-0">
           <SheetHeader className="px-5 pt-5 pb-3 border-b border-border">
             <SheetTitle className="flex items-center gap-2">
-              <img src={LOGO_URL} alt="DigitTrader" className="h-8 w-8 object-contain" />
-              <span className="text-base font-extrabold tracking-tight">DIGIT<span className="text-primary">TRADER</span></span>
+              <img src={LOGO_URL} alt="Digit Trader" className="h-8 w-8 object-contain" />
+              <span className="text-base font-extrabold tracking-tight">DIGIT<span className="text-primary"> TRADER</span></span>
             </SheetTitle>
           </SheetHeader>
           <nav className="p-2">
@@ -114,8 +114,8 @@ export function AppHeader() {
       </Sheet>
 
       <Link to="/binary" className="flex items-center gap-1.5">
-        <img src={LOGO_URL} alt="DigitTrader" className="h-8 w-8 object-contain drop-shadow-[0_0_10px_color-mix(in_oklab,var(--gold)_55%,transparent)]" />
-        <span className="hidden sm:inline text-xs font-extrabold tracking-wider">DIGIT<span className="text-primary">TRADER</span></span>
+        <img src={LOGO_URL} alt="Digit Trader" className="h-8 w-8 object-contain drop-shadow-[0_0_10px_color-mix(in_oklab,var(--gold)_55%,transparent)]" />
+        <span className="hidden sm:inline text-xs font-extrabold tracking-wider">DIGIT<span className="text-primary"> TRADER</span></span>
       </Link>
 
       <div className="ml-auto">

@@ -73,8 +73,8 @@ function AuthPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
           <div className="inline-flex items-center gap-2.5 mb-2">
-            <img src={LOGO_URL} alt="DigitTrader" className="h-11 w-11 object-contain drop-shadow-[0_0_18px_color-mix(in_oklab,var(--gold)_55%,transparent)]" />
-            <span className="text-xl font-extrabold tracking-wider">DIGIT<span className="text-primary">TRADER</span></span>
+            <img src={LOGO_URL} alt="Digit Trader" className="h-11 w-11 object-contain drop-shadow-[0_0_18px_color-mix(in_oklab,var(--gold)_55%,transparent)]" />
+            <span className="text-xl font-extrabold tracking-wider">DIGIT<span className="text-primary"> TRADER</span></span>
           </div>
           <p className="text-xs text-muted-foreground">Forex · Crypto · Binaries · Polymarket · Aviator</p>
         </div>

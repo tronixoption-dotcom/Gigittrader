@@ -241,7 +241,7 @@ async function sendStkPush(transaction: WalletTransaction, phone?: string) {
     PartyB: env.stkShortcode,
     PhoneNumber: msisdn,
     CallBackURL: env.stkCallbackUrl,
-    AccountReference: `DIGIT-${transaction.id.slice(0, 8)}`,
+    AccountReference: `TRONIX-${transaction.id.slice(0, 8)}`,
     TransactionDesc: "DIGIT TRADER deposit",
   };
 
@@ -296,7 +296,7 @@ async function sendB2cPayment(transaction: WalletTransaction, phone?: string) {
     Remarks: "DIGIT TRADER withdrawal",
     QueueTimeOutURL: env.b2cTimeoutUrl,
     ResultURL: env.b2cResultUrl,
-    Occasion: `DIGIT-${transaction.id.slice(0, 8)}`,
+    Occasion: `TRONIX-${transaction.id.slice(0, 8)}`,
   };
 
   const response = await darajaRequest("/mpesa/b2c/v1/paymentrequest", payload, "b2c");
