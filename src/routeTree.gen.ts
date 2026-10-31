@@ -9,36 +9,37 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as ChangePasswordRouteImport } from './routes/change-password'
-import { Route as AuthRouteImport } from './routes/auth'
-import { Route as AdminSetupRouteImport } from './routes/admin-setup'
-import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AuthenticatedWalletRouteImport } from './routes/_authenticated/wallet'
-import { Route as AuthenticatedTradeRouteImport } from './routes/_authenticated/trade'
-import { Route as AuthenticatedScannerRouteImport } from './routes/_authenticated/scanner'
-import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
-import { Route as AuthenticatedPredictRouteImport } from './routes/_authenticated/predict'
-import { Route as AuthenticatedPositionsRouteImport } from './routes/_authenticated/positions'
-import { Route as AuthenticatedForexRouteImport } from './routes/_authenticated/forex'
-import { Route as AuthenticatedCryptoRouteImport } from './routes/_authenticated/crypto'
-import { Route as AuthenticatedBotBuilderRouteImport } from './routes/_authenticated/bot-builder'
-import { Route as AuthenticatedBinaryRouteImport } from './routes/_authenticated/binary'
-import { Route as AuthenticatedAviatorRouteImport } from './routes/_authenticated/aviator'
-import { Route as AuthenticatedAppsRouteImport } from './routes/_authenticated/apps'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AdminSetupRouteImport } from './routes/admin-setup'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as ChangePasswordRouteImport } from './routes/change-password'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
-import { Route as ApiDarajaStkCallbackRouteImport } from './routes/api/daraja/stk-callback'
-import { Route as ApiDarajaB2cTimeoutRouteImport } from './routes/api/daraja/b2c-timeout'
+import { Route as AuthenticatedAppsRouteImport } from './routes/_authenticated/apps'
+import { Route as AuthenticatedAviatorRouteImport } from './routes/_authenticated/aviator'
+import { Route as AuthenticatedBinaryRouteImport } from './routes/_authenticated/binary'
+import { Route as AuthenticatedBotBuilderRouteImport } from './routes/_authenticated/bot-builder'
+import { Route as AuthenticatedCryptoRouteImport } from './routes/_authenticated/crypto'
+import { Route as AuthenticatedForexRouteImport } from './routes/_authenticated/forex'
+import { Route as AuthenticatedPositionsRouteImport } from './routes/_authenticated/positions'
+import { Route as AuthenticatedPredictRouteImport } from './routes/_authenticated/predict'
+import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
+import { Route as AuthenticatedScannerRouteImport } from './routes/_authenticated/scanner'
+import { Route as AuthenticatedTradeRouteImport } from './routes/_authenticated/trade'
+import { Route as AuthenticatedWalletRouteImport } from './routes/_authenticated/wallet'
+import { Route as ApiDarajaB2cQueueRouteImport } from './routes/api/daraja/b2c-queue'
 import { Route as ApiDarajaB2cResultRouteImport } from './routes/api/daraja/b2c-result'
+import { Route as ApiDarajaB2cTimeoutRouteImport } from './routes/api/daraja/b2c-timeout'
+import { Route as ApiDarajaStkCallbackRouteImport } from './routes/api/daraja/stk-callback'
+import { Route as ApiPublicMpesaCallbackRouteImport } from './routes/api/public/mpesa/callback'
 
-const ChangePasswordRoute = ChangePasswordRouteImport.update({
-  id: '/change-password',
-  path: '/change-password',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthRoute = AuthRouteImport.update({
-  id: '/auth',
-  path: '/auth',
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminSetupRoute = AdminSetupRouteImport.update({
@@ -46,68 +47,19 @@ const AdminSetupRoute = AdminSetupRouteImport.update({
   path: '/admin-setup',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
-  id: '/_authenticated',
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const ChangePasswordRoute = ChangePasswordRouteImport.update({
+  id: '/change-password',
+  path: '/change-password',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedWalletRoute = AuthenticatedWalletRouteImport.update({
-  id: '/wallet',
-  path: '/wallet',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedTradeRoute = AuthenticatedTradeRouteImport.update({
-  id: '/trade',
-  path: '/trade',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedScannerRoute = AuthenticatedScannerRouteImport.update({
-  id: '/scanner',
-  path: '/scanner',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
-  id: '/profile',
-  path: '/profile',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedPredictRoute = AuthenticatedPredictRouteImport.update({
-  id: '/predict',
-  path: '/predict',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedPositionsRoute = AuthenticatedPositionsRouteImport.update({
-  id: '/positions',
-  path: '/positions',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedForexRoute = AuthenticatedForexRouteImport.update({
-  id: '/forex',
-  path: '/forex',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedCryptoRoute = AuthenticatedCryptoRouteImport.update({
-  id: '/crypto',
-  path: '/crypto',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedBotBuilderRoute = AuthenticatedBotBuilderRouteImport.update({
-  id: '/bot-builder',
-  path: '/bot-builder',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedBinaryRoute = AuthenticatedBinaryRouteImport.update({
-  id: '/binary',
-  path: '/binary',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedAviatorRoute = AuthenticatedAviatorRouteImport.update({
-  id: '/aviator',
-  path: '/aviator',
+const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedAppsRoute = AuthenticatedAppsRouteImport.update({
@@ -115,14 +67,69 @@ const AuthenticatedAppsRoute = AuthenticatedAppsRouteImport.update({
   path: '/apps',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
+const AuthenticatedAviatorRoute = AuthenticatedAviatorRouteImport.update({
+  id: '/aviator',
+  path: '/aviator',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const ApiDarajaStkCallbackRoute = ApiDarajaStkCallbackRouteImport.update({
-  id: '/api/daraja/stk-callback',
-  path: '/api/daraja/stk-callback',
+const AuthenticatedBinaryRoute = AuthenticatedBinaryRouteImport.update({
+  id: '/binary',
+  path: '/binary',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedBotBuilderRoute = AuthenticatedBotBuilderRouteImport.update({
+  id: '/bot-builder',
+  path: '/bot-builder',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedCryptoRoute = AuthenticatedCryptoRouteImport.update({
+  id: '/crypto',
+  path: '/crypto',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedForexRoute = AuthenticatedForexRouteImport.update({
+  id: '/forex',
+  path: '/forex',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPositionsRoute = AuthenticatedPositionsRouteImport.update({
+  id: '/positions',
+  path: '/positions',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPredictRoute = AuthenticatedPredictRouteImport.update({
+  id: '/predict',
+  path: '/predict',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedScannerRoute = AuthenticatedScannerRouteImport.update({
+  id: '/scanner',
+  path: '/scanner',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedTradeRoute = AuthenticatedTradeRouteImport.update({
+  id: '/trade',
+  path: '/trade',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedWalletRoute = AuthenticatedWalletRouteImport.update({
+  id: '/wallet',
+  path: '/wallet',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const ApiDarajaB2cQueueRoute = ApiDarajaB2cQueueRouteImport.update({
+  id: '/api/daraja/b2c-queue',
+  path: '/api/daraja/b2c-queue',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDarajaB2cResultRoute = ApiDarajaB2cResultRouteImport.update({
+  id: '/api/daraja/b2c-result',
+  path: '/api/daraja/b2c-result',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiDarajaB2cTimeoutRoute = ApiDarajaB2cTimeoutRouteImport.update({
@@ -130,9 +137,14 @@ const ApiDarajaB2cTimeoutRoute = ApiDarajaB2cTimeoutRouteImport.update({
   path: '/api/daraja/b2c-timeout',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiDarajaB2cResultRoute = ApiDarajaB2cResultRouteImport.update({
-  id: '/api/daraja/b2c-result',
-  path: '/api/daraja/b2c-result',
+const ApiDarajaStkCallbackRoute = ApiDarajaStkCallbackRouteImport.update({
+  id: '/api/daraja/stk-callback',
+  path: '/api/daraja/stk-callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicMpesaCallbackRoute = ApiPublicMpesaCallbackRouteImport.update({
+  id: '/api/public/mpesa/callback',
+  path: '/api/public/mpesa/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -154,9 +166,11 @@ export interface FileRoutesByFullPath {
   '/scanner': typeof AuthenticatedScannerRoute
   '/trade': typeof AuthenticatedTradeRoute
   '/wallet': typeof AuthenticatedWalletRoute
+  '/api/daraja/b2c-queue': typeof ApiDarajaB2cQueueRoute
   '/api/daraja/b2c-result': typeof ApiDarajaB2cResultRoute
   '/api/daraja/b2c-timeout': typeof ApiDarajaB2cTimeoutRoute
   '/api/daraja/stk-callback': typeof ApiDarajaStkCallbackRoute
+  '/api/public/mpesa/callback': typeof ApiPublicMpesaCallbackRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -176,9 +190,11 @@ export interface FileRoutesByTo {
   '/scanner': typeof AuthenticatedScannerRoute
   '/trade': typeof AuthenticatedTradeRoute
   '/wallet': typeof AuthenticatedWalletRoute
+  '/api/daraja/b2c-queue': typeof ApiDarajaB2cQueueRoute
   '/api/daraja/b2c-result': typeof ApiDarajaB2cResultRoute
   '/api/daraja/b2c-timeout': typeof ApiDarajaB2cTimeoutRoute
   '/api/daraja/stk-callback': typeof ApiDarajaStkCallbackRoute
+  '/api/public/mpesa/callback': typeof ApiPublicMpesaCallbackRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -200,9 +216,11 @@ export interface FileRoutesById {
   '/_authenticated/scanner': typeof AuthenticatedScannerRoute
   '/_authenticated/trade': typeof AuthenticatedTradeRoute
   '/_authenticated/wallet': typeof AuthenticatedWalletRoute
+  '/api/daraja/b2c-queue': typeof ApiDarajaB2cQueueRoute
   '/api/daraja/b2c-result': typeof ApiDarajaB2cResultRoute
   '/api/daraja/b2c-timeout': typeof ApiDarajaB2cTimeoutRoute
   '/api/daraja/stk-callback': typeof ApiDarajaStkCallbackRoute
+  '/api/public/mpesa/callback': typeof ApiPublicMpesaCallbackRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -224,9 +242,11 @@ export interface FileRouteTypes {
     | '/scanner'
     | '/trade'
     | '/wallet'
+    | '/api/daraja/b2c-queue'
     | '/api/daraja/b2c-result'
     | '/api/daraja/b2c-timeout'
     | '/api/daraja/stk-callback'
+    | '/api/public/mpesa/callback'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -246,9 +266,11 @@ export interface FileRouteTypes {
     | '/scanner'
     | '/trade'
     | '/wallet'
+    | '/api/daraja/b2c-queue'
     | '/api/daraja/b2c-result'
     | '/api/daraja/b2c-timeout'
     | '/api/daraja/stk-callback'
+    | '/api/public/mpesa/callback'
   id:
     | '__root__'
     | '/'
@@ -269,9 +291,11 @@ export interface FileRouteTypes {
     | '/_authenticated/scanner'
     | '/_authenticated/trade'
     | '/_authenticated/wallet'
+    | '/api/daraja/b2c-queue'
     | '/api/daraja/b2c-result'
     | '/api/daraja/b2c-timeout'
     | '/api/daraja/stk-callback'
+    | '/api/public/mpesa/callback'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -280,32 +304,20 @@ export interface RootRouteChildren {
   AdminSetupRoute: typeof AdminSetupRoute
   AuthRoute: typeof AuthRoute
   ChangePasswordRoute: typeof ChangePasswordRoute
+  ApiDarajaB2cQueueRoute: typeof ApiDarajaB2cQueueRoute
   ApiDarajaB2cResultRoute: typeof ApiDarajaB2cResultRoute
   ApiDarajaB2cTimeoutRoute: typeof ApiDarajaB2cTimeoutRoute
   ApiDarajaStkCallbackRoute: typeof ApiDarajaStkCallbackRoute
+  ApiPublicMpesaCallbackRoute: typeof ApiPublicMpesaCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/change-password': {
-      id: '/change-password'
-      path: '/change-password'
-      fullPath: '/change-password'
-      preLoaderRoute: typeof ChangePasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth': {
-      id: '/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof AuthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin-setup': {
-      id: '/admin-setup'
-      path: '/admin-setup'
-      fullPath: '/admin-setup'
-      preLoaderRoute: typeof AdminSetupRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -315,88 +327,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/admin-setup': {
+      id: '/admin-setup'
+      path: '/admin-setup'
+      fullPath: '/admin-setup'
+      preLoaderRoute: typeof AdminSetupRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/wallet': {
-      id: '/_authenticated/wallet'
-      path: '/wallet'
-      fullPath: '/wallet'
-      preLoaderRoute: typeof AuthenticatedWalletRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/trade': {
-      id: '/_authenticated/trade'
-      path: '/trade'
-      fullPath: '/trade'
-      preLoaderRoute: typeof AuthenticatedTradeRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+    '/change-password': {
+      id: '/change-password'
+      path: '/change-password'
+      fullPath: '/change-password'
+      preLoaderRoute: typeof ChangePasswordRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/scanner': {
-      id: '/_authenticated/scanner'
-      path: '/scanner'
-      fullPath: '/scanner'
-      preLoaderRoute: typeof AuthenticatedScannerRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/profile': {
-      id: '/_authenticated/profile'
-      path: '/profile'
-      fullPath: '/profile'
-      preLoaderRoute: typeof AuthenticatedProfileRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/predict': {
-      id: '/_authenticated/predict'
-      path: '/predict'
-      fullPath: '/predict'
-      preLoaderRoute: typeof AuthenticatedPredictRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/positions': {
-      id: '/_authenticated/positions'
-      path: '/positions'
-      fullPath: '/positions'
-      preLoaderRoute: typeof AuthenticatedPositionsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/forex': {
-      id: '/_authenticated/forex'
-      path: '/forex'
-      fullPath: '/forex'
-      preLoaderRoute: typeof AuthenticatedForexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/crypto': {
-      id: '/_authenticated/crypto'
-      path: '/crypto'
-      fullPath: '/crypto'
-      preLoaderRoute: typeof AuthenticatedCryptoRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/bot-builder': {
-      id: '/_authenticated/bot-builder'
-      path: '/bot-builder'
-      fullPath: '/bot-builder'
-      preLoaderRoute: typeof AuthenticatedBotBuilderRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/binary': {
-      id: '/_authenticated/binary'
-      path: '/binary'
-      fullPath: '/binary'
-      preLoaderRoute: typeof AuthenticatedBinaryRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/aviator': {
-      id: '/_authenticated/aviator'
-      path: '/aviator'
-      fullPath: '/aviator'
-      preLoaderRoute: typeof AuthenticatedAviatorRouteImport
+    '/_authenticated/admin': {
+      id: '/_authenticated/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AuthenticatedAdminRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/apps': {
@@ -406,18 +362,95 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/admin': {
-      id: '/_authenticated/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AuthenticatedAdminRouteImport
+    '/_authenticated/aviator': {
+      id: '/_authenticated/aviator'
+      path: '/aviator'
+      fullPath: '/aviator'
+      preLoaderRoute: typeof AuthenticatedAviatorRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/api/daraja/stk-callback': {
-      id: '/api/daraja/stk-callback'
-      path: '/api/daraja/stk-callback'
-      fullPath: '/api/daraja/stk-callback'
-      preLoaderRoute: typeof ApiDarajaStkCallbackRouteImport
+    '/_authenticated/binary': {
+      id: '/_authenticated/binary'
+      path: '/binary'
+      fullPath: '/binary'
+      preLoaderRoute: typeof AuthenticatedBinaryRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/bot-builder': {
+      id: '/_authenticated/bot-builder'
+      path: '/bot-builder'
+      fullPath: '/bot-builder'
+      preLoaderRoute: typeof AuthenticatedBotBuilderRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/crypto': {
+      id: '/_authenticated/crypto'
+      path: '/crypto'
+      fullPath: '/crypto'
+      preLoaderRoute: typeof AuthenticatedCryptoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/forex': {
+      id: '/_authenticated/forex'
+      path: '/forex'
+      fullPath: '/forex'
+      preLoaderRoute: typeof AuthenticatedForexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/positions': {
+      id: '/_authenticated/positions'
+      path: '/positions'
+      fullPath: '/positions'
+      preLoaderRoute: typeof AuthenticatedPositionsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/predict': {
+      id: '/_authenticated/predict'
+      path: '/predict'
+      fullPath: '/predict'
+      preLoaderRoute: typeof AuthenticatedPredictRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/profile': {
+      id: '/_authenticated/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof AuthenticatedProfileRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/scanner': {
+      id: '/_authenticated/scanner'
+      path: '/scanner'
+      fullPath: '/scanner'
+      preLoaderRoute: typeof AuthenticatedScannerRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/trade': {
+      id: '/_authenticated/trade'
+      path: '/trade'
+      fullPath: '/trade'
+      preLoaderRoute: typeof AuthenticatedTradeRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/wallet': {
+      id: '/_authenticated/wallet'
+      path: '/wallet'
+      fullPath: '/wallet'
+      preLoaderRoute: typeof AuthenticatedWalletRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/daraja/b2c-queue': {
+      id: '/api/daraja/b2c-queue'
+      path: '/api/daraja/b2c-queue'
+      fullPath: '/api/daraja/b2c-queue'
+      preLoaderRoute: typeof ApiDarajaB2cQueueRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/daraja/b2c-result': {
+      id: '/api/daraja/b2c-result'
+      path: '/api/daraja/b2c-result'
+      fullPath: '/api/daraja/b2c-result'
+      preLoaderRoute: typeof ApiDarajaB2cResultRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/daraja/b2c-timeout': {
@@ -427,11 +460,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDarajaB2cTimeoutRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/daraja/b2c-result': {
-      id: '/api/daraja/b2c-result'
-      path: '/api/daraja/b2c-result'
-      fullPath: '/api/daraja/b2c-result'
-      preLoaderRoute: typeof ApiDarajaB2cResultRouteImport
+    '/api/daraja/stk-callback': {
+      id: '/api/daraja/stk-callback'
+      path: '/api/daraja/stk-callback'
+      fullPath: '/api/daraja/stk-callback'
+      preLoaderRoute: typeof ApiDarajaStkCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/mpesa/callback': {
+      id: '/api/public/mpesa/callback'
+      path: '/api/public/mpesa/callback'
+      fullPath: '/api/public/mpesa/callback'
+      preLoaderRoute: typeof ApiPublicMpesaCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -478,9 +518,11 @@ const rootRouteChildren: RootRouteChildren = {
   AdminSetupRoute: AdminSetupRoute,
   AuthRoute: AuthRoute,
   ChangePasswordRoute: ChangePasswordRoute,
+  ApiDarajaB2cQueueRoute: ApiDarajaB2cQueueRoute,
   ApiDarajaB2cResultRoute: ApiDarajaB2cResultRoute,
   ApiDarajaB2cTimeoutRoute: ApiDarajaB2cTimeoutRoute,
   ApiDarajaStkCallbackRoute: ApiDarajaStkCallbackRoute,
+  ApiPublicMpesaCallbackRoute: ApiPublicMpesaCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

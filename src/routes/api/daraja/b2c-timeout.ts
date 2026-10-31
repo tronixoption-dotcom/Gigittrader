@@ -12,7 +12,7 @@ export const Route = createFileRoute("/api/daraja/b2c-timeout")({
   },
 });
 
-async function handleB2cTimeout(payload: Record<string, unknown>) {
+export async function handleB2cTimeout(payload: Record<string, unknown>) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const result = getRecord(payload.Result);
   const conversationId = getString(result.ConversationID);

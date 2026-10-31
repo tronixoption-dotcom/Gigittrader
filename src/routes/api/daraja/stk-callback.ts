@@ -12,7 +12,7 @@ export const Route = createFileRoute("/api/daraja/stk-callback")({
   },
 });
 
-async function handleStkCallback(payload: Record<string, unknown>) {
+export async function handleStkCallback(payload: Record<string, unknown>) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const callback = getRecord(getRecord(payload.Body).stkCallback);
   const checkoutRequestId = getString(callback.CheckoutRequestID);
@@ -81,10 +81,18 @@ async function handleStkCallback(payload: Record<string, unknown>) {
 }
 
 async function queryStkStatusLocal(checkoutRequestId: string) {
-  const baseUrl = (process.env.DARAJA_BASE_URL || "https://sandbox.safaricom.co.ke").replace(
-    /\/+$/,
-    "",
-  );
+  const configuredEnvironment = process.env.DARAJA_ENV?.toLowerCase();
+  const environmentBaseUrl =
+    configuredEnvironment === "production"
+      ? "https://api.safaricom.co.ke"
+      : configuredEnvironment === "sandbox"
+        ? "https://sandbox.safaricom.co.ke"
+        : undefined;
+  const baseUrl = (
+    environmentBaseUrl ||
+    process.env.DARAJA_BASE_URL ||
+    "https://sandbox.safaricom.co.ke"
+  ).replace(/\/+$/, "");
   const consumerKey = process.env.DARAJA_CONSUMER_KEY ?? "";
   const consumerSecret = process.env.DARAJA_CONSUMER_SECRET ?? "";
   const stkShortcode = process.env.DARAJA_STK_SHORTCODE ?? "";

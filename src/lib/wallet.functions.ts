@@ -704,8 +704,18 @@ function darajaTimestamp() {
 }
 
 function getDarajaEnv(mode: DarajaMode) {
+  const configuredEnvironment = readEnv("DARAJA_ENV")?.toLowerCase();
+  const environmentBaseUrl =
+    configuredEnvironment === "production"
+      ? "https://api.safaricom.co.ke"
+      : configuredEnvironment === "sandbox"
+        ? "https://sandbox.safaricom.co.ke"
+        : undefined;
+  if (configuredEnvironment && !environmentBaseUrl) {
+    throw new Error("DARAJA_ENV must be either production or sandbox.");
+  }
   const baseUrl = normalizeDarajaBaseUrl(
-    readEnv("DARAJA_BASE_URL") ?? "https://sandbox.safaricom.co.ke",
+    environmentBaseUrl ?? readEnv("DARAJA_BASE_URL") ?? "https://sandbox.safaricom.co.ke",
   );
   assertDarajaEnvironment(mode, baseUrl);
   const appUrl = getPublicAppUrl();
@@ -716,7 +726,10 @@ function getDarajaEnv(mode: DarajaMode) {
   const stk = {
     stkShortcode: readEnv("DARAJA_STK_SHORTCODE"),
     stkPasskey: readEnv("DARAJA_STK_PASSKEY"),
-    stkCallbackUrl: readEnv("DARAJA_STK_CALLBACK_URL") ?? `${appUrl}/api/daraja/stk-callback`,
+    stkCallbackUrl:
+      readEnv("DARAJA_CALLBACK_URL") ??
+      readEnv("DARAJA_STK_CALLBACK_URL") ??
+      `${appUrl}/api/daraja/stk-callback`,
   };
   const b2c = {
     b2cInitiatorName: readEnv("DARAJA_B2C_INITIATOR_NAME"),
@@ -724,7 +737,10 @@ function getDarajaEnv(mode: DarajaMode) {
     b2cShortcode: readEnv("DARAJA_B2C_SHORTCODE"),
     b2cCommandId: readEnv("DARAJA_B2C_COMMAND_ID") ?? "BusinessPayment",
     b2cResultUrl: readEnv("DARAJA_B2C_RESULT_URL") ?? `${appUrl}/api/daraja/b2c-result`,
-    b2cTimeoutUrl: readEnv("DARAJA_B2C_TIMEOUT_URL") ?? `${appUrl}/api/daraja/b2c-timeout`,
+    b2cTimeoutUrl:
+      readEnv("DARAJA_B2C_QUEUE_URL") ??
+      readEnv("DARAJA_B2C_TIMEOUT_URL") ??
+      `${appUrl}/api/daraja/b2c-timeout`,
   };
   const required = mode === "stk" ? { ...shared, ...stk } : { ...shared, ...b2c };
   const missing = Object.entries(required)
@@ -740,6 +756,8 @@ function getPublicAppUrl() {
   const explicit =
     readEnv("DARAJA_PUBLIC_BASE_URL") ?? readEnv("PUBLIC_APP_URL") ?? readEnv("APP_URL");
   if (explicit) return explicit.replace(/\/$/, "");
+  const callbackUrl = readEnv("DARAJA_CALLBACK_URL");
+  if (callbackUrl) return new URL(callbackUrl).origin;
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   throw new Error("Missing public app URL. Set DARAJA_PUBLIC_BASE_URL or APP_URL.");
 }

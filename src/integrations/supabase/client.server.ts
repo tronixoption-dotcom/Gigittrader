@@ -35,12 +35,15 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 
 function createSupabaseAdminClient() {
   const SUPABASE_URL = getSupabaseUrl();
-  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const SUPABASE_SERVICE_ROLE_KEY =
+    process.env.SUPABASE_SECRET_ROLE_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     const missing = [
       ...(!SUPABASE_URL ? ["SUPABASE_URL"] : []),
-      ...(!SUPABASE_SERVICE_ROLE_KEY ? ["SUPABASE_SERVICE_ROLE_KEY"] : []),
+      ...(!SUPABASE_SERVICE_ROLE_KEY
+        ? ["SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_ROLE_KEY"]
+        : []),
     ];
     const message = `Missing Supabase environment variable(s): ${missing.join(", ")}. Set them in Vercel and your local .env file.`;
     console.error(`[Supabase] ${message}`);
