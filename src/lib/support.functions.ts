@@ -51,7 +51,7 @@ export const getSupportInbox = createServerFn({ method: "GET" })
 
 export const getSupportMessages = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ thread_id: z.string().uuid() }).parse(d))
+  .validator((d: unknown) => z.object({ thread_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const admin = await isAdmin(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -80,7 +80,7 @@ export const getSupportMessages = createServerFn({ method: "POST" })
 
 export const sendSupportMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z
       .object({
         thread_id: z.string().uuid().optional(),

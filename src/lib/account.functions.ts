@@ -11,7 +11,7 @@ type RpcClient = {
 
 export const setActiveAccount = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ account: z.enum(["real", "demo"]) }).parse(d))
+  .validator((d: unknown) => z.object({ account: z.enum(["real", "demo"]) }).parse(d))
   .handler(async ({ data, context }) => {
     const { error } = await (context.supabase as unknown as RpcClient).rpc("set_active_account", {
       _account: data.account,

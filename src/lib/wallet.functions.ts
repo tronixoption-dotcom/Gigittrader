@@ -36,7 +36,7 @@ type DarajaStep = "oauth_token" | "stk_push" | "b2c_payment";
 
 export const createDeposit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => MoneyInput.parse(d))
+  .validator((d: unknown) => MoneyInput.parse(d))
   .handler(async ({ data, context }) => {
     const phone = data.method === "mpesa" ? await getProfilePhone(context.userId) : data.phone;
     validateMoney("deposit", data.method, data.amount, phone);
@@ -65,7 +65,7 @@ export const createDeposit = createServerFn({ method: "POST" })
 
 export const createWithdrawal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => MoneyInput.parse(d))
+  .validator((d: unknown) => MoneyInput.parse(d))
   .handler(async ({ data, context }) => {
     if (data.account === "demo") {
       throw new Error("Demo funds cannot be withdrawn. Switch to your real account to withdraw.");

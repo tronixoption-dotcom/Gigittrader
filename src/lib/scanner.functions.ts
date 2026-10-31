@@ -24,7 +24,7 @@ const MARKETS = [
 ];
 
 export const deepScanMarket = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => InputSchema.parse(input))
+  .validator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data }) => scriptedScan(data.category));
 
 function scriptedScan(category: ScannerCategory) {

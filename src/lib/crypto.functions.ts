@@ -15,7 +15,7 @@ const COIN_MAP: Record<string, string> = {
 const QuoteInput = z.object({ symbol: z.string().min(2).max(8) });
 
 export const getCryptoQuote = createServerFn({ method: "GET" })
-  .inputValidator((d: unknown) => QuoteInput.parse(d))
+  .validator((d: unknown) => QuoteInput.parse(d))
   .handler(async ({ data }) => {
     const id = COIN_MAP[data.symbol.toUpperCase()];
     if (!id) return { ok: false as const, reason: "unknown_symbol" as const };
@@ -41,7 +41,7 @@ export const getCryptoQuote = createServerFn({ method: "GET" })
 const CandleInput = z.object({ symbol: z.string().min(2).max(8), days: z.number().int().min(1).max(30).default(1) });
 
 export const getCryptoCandles = createServerFn({ method: "GET" })
-  .inputValidator((d: unknown) => CandleInput.parse(d))
+  .validator((d: unknown) => CandleInput.parse(d))
   .handler(async ({ data }) => {
     const id = COIN_MAP[data.symbol.toUpperCase()];
     if (!id) return { ok: false as const, reason: "unknown_symbol" as const };

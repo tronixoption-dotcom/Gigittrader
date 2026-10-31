@@ -31,7 +31,7 @@ const PlaceTradeInput = z.object({
 
 export const placeTrade = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => PlaceTradeInput.parse(d))
+  .validator((d: unknown) => PlaceTradeInput.parse(d))
   .handler(async ({ data, context }) => {
     const { data: trade, error } = await (context.supabase as unknown as RpcClient).rpc(
       "place_trade",
@@ -75,7 +75,7 @@ const SettleTradeInput = z.object({
 
 export const settleTrade = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => SettleTradeInput.parse(d))
+  .validator((d: unknown) => SettleTradeInput.parse(d))
   .handler(async ({ data, context }) => {
     const { data: result, error } = await (context.supabase as unknown as RpcClient).rpc(
       "settle_trade",
@@ -105,7 +105,7 @@ export const settleTrade = createServerFn({ method: "POST" })
 
 export const cancelTrade = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ trade_id: z.string().uuid() }).parse(d))
+  .validator((d: unknown) => z.object({ trade_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: result, error } = await (context.supabase as unknown as RpcClient).rpc(
       "cancel_open_trade",
@@ -117,7 +117,7 @@ export const cancelTrade = createServerFn({ method: "POST" })
 
 export const closeTradeAtPrice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z.object({ trade_id: z.string().uuid(), exit_price: z.number().positive() }).parse(d),
   )
   .handler(async ({ data, context }) => {

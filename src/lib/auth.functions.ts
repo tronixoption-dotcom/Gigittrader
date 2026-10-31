@@ -89,7 +89,7 @@ export async function createAdminUser(data: {
 }
 
 export const signUpWithoutEmailVerification = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => SignUpInput.parse(d))
+  .validator((d: unknown) => SignUpInput.parse(d))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const username = data.fullName.trim().split(/\s+/)[0] || data.email.split("@")[0];
@@ -141,7 +141,7 @@ export const signUpWithoutEmailVerification = createServerFn({ method: "POST" })
   });
 
 export const createAdminWithSetupPassword = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => AdminSetupInput.parse(d))
+  .validator((d: unknown) => AdminSetupInput.parse(d))
   .handler(async ({ data }) => {
     const expected = process.env.ADMIN_SETUP_PASSWORD ?? "@12Incorrect";
     if (data.setupPassword !== expected) throw new Error("Incorrect admin setup password");
@@ -154,7 +154,7 @@ export const createAdminWithSetupPassword = createServerFn({ method: "POST" })
   });
 
 export const verifyAdminSetupPassword = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => AdminSetupPasswordInput.parse(d))
+  .validator((d: unknown) => AdminSetupPasswordInput.parse(d))
   .handler(async ({ data }) => {
     const expected = process.env.ADMIN_SETUP_PASSWORD ?? "@12Incorrect";
     if (data.setupPassword !== expected) throw new Error("Incorrect admin setup password");
