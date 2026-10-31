@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ChangePasswordRouteImport } from './routes/change-password'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdminSetupRouteImport } from './routes/admin-setup'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
@@ -21,6 +22,7 @@ import { Route as AuthenticatedPredictRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedPositionsRouteImport } from './routes/_authenticated/positions'
 import { Route as AuthenticatedForexRouteImport } from './routes/_authenticated/forex'
 import { Route as AuthenticatedCryptoRouteImport } from './routes/_authenticated/crypto'
+import { Route as AuthenticatedBotBuilderRouteImport } from './routes/_authenticated/bot-builder'
 import { Route as AuthenticatedBinaryRouteImport } from './routes/_authenticated/binary'
 import { Route as AuthenticatedAviatorRouteImport } from './routes/_authenticated/aviator'
 import { Route as AuthenticatedAppsRouteImport } from './routes/_authenticated/apps'
@@ -29,6 +31,11 @@ import { Route as ApiDarajaStkCallbackRouteImport } from './routes/api/daraja/st
 import { Route as ApiDarajaB2cTimeoutRouteImport } from './routes/api/daraja/b2c-timeout'
 import { Route as ApiDarajaB2cResultRouteImport } from './routes/api/daraja/b2c-result'
 
+const ChangePasswordRoute = ChangePasswordRouteImport.update({
+  id: '/change-password',
+  path: '/change-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -88,6 +95,11 @@ const AuthenticatedCryptoRoute = AuthenticatedCryptoRouteImport.update({
   path: '/crypto',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedBotBuilderRoute = AuthenticatedBotBuilderRouteImport.update({
+  id: '/bot-builder',
+  path: '/bot-builder',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedBinaryRoute = AuthenticatedBinaryRouteImport.update({
   id: '/binary',
   path: '/binary',
@@ -128,10 +140,12 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin-setup': typeof AdminSetupRoute
   '/auth': typeof AuthRoute
+  '/change-password': typeof ChangePasswordRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/apps': typeof AuthenticatedAppsRoute
   '/aviator': typeof AuthenticatedAviatorRoute
   '/binary': typeof AuthenticatedBinaryRoute
+  '/bot-builder': typeof AuthenticatedBotBuilderRoute
   '/crypto': typeof AuthenticatedCryptoRoute
   '/forex': typeof AuthenticatedForexRoute
   '/positions': typeof AuthenticatedPositionsRoute
@@ -148,10 +162,12 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin-setup': typeof AdminSetupRoute
   '/auth': typeof AuthRoute
+  '/change-password': typeof ChangePasswordRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/apps': typeof AuthenticatedAppsRoute
   '/aviator': typeof AuthenticatedAviatorRoute
   '/binary': typeof AuthenticatedBinaryRoute
+  '/bot-builder': typeof AuthenticatedBotBuilderRoute
   '/crypto': typeof AuthenticatedCryptoRoute
   '/forex': typeof AuthenticatedForexRoute
   '/positions': typeof AuthenticatedPositionsRoute
@@ -170,10 +186,12 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/admin-setup': typeof AdminSetupRoute
   '/auth': typeof AuthRoute
+  '/change-password': typeof ChangePasswordRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/apps': typeof AuthenticatedAppsRoute
   '/_authenticated/aviator': typeof AuthenticatedAviatorRoute
   '/_authenticated/binary': typeof AuthenticatedBinaryRoute
+  '/_authenticated/bot-builder': typeof AuthenticatedBotBuilderRoute
   '/_authenticated/crypto': typeof AuthenticatedCryptoRoute
   '/_authenticated/forex': typeof AuthenticatedForexRoute
   '/_authenticated/positions': typeof AuthenticatedPositionsRoute
@@ -192,10 +210,12 @@ export interface FileRouteTypes {
     | '/'
     | '/admin-setup'
     | '/auth'
+    | '/change-password'
     | '/admin'
     | '/apps'
     | '/aviator'
     | '/binary'
+    | '/bot-builder'
     | '/crypto'
     | '/forex'
     | '/positions'
@@ -212,10 +232,12 @@ export interface FileRouteTypes {
     | '/'
     | '/admin-setup'
     | '/auth'
+    | '/change-password'
     | '/admin'
     | '/apps'
     | '/aviator'
     | '/binary'
+    | '/bot-builder'
     | '/crypto'
     | '/forex'
     | '/positions'
@@ -233,10 +255,12 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/admin-setup'
     | '/auth'
+    | '/change-password'
     | '/_authenticated/admin'
     | '/_authenticated/apps'
     | '/_authenticated/aviator'
     | '/_authenticated/binary'
+    | '/_authenticated/bot-builder'
     | '/_authenticated/crypto'
     | '/_authenticated/forex'
     | '/_authenticated/positions'
@@ -255,6 +279,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AdminSetupRoute: typeof AdminSetupRoute
   AuthRoute: typeof AuthRoute
+  ChangePasswordRoute: typeof ChangePasswordRoute
   ApiDarajaB2cResultRoute: typeof ApiDarajaB2cResultRoute
   ApiDarajaB2cTimeoutRoute: typeof ApiDarajaB2cTimeoutRoute
   ApiDarajaStkCallbackRoute: typeof ApiDarajaStkCallbackRoute
@@ -262,6 +287,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/change-password': {
+      id: '/change-password'
+      path: '/change-password'
+      fullPath: '/change-password'
+      preLoaderRoute: typeof ChangePasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -346,6 +378,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCryptoRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/bot-builder': {
+      id: '/_authenticated/bot-builder'
+      path: '/bot-builder'
+      fullPath: '/bot-builder'
+      preLoaderRoute: typeof AuthenticatedBotBuilderRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/binary': {
       id: '/_authenticated/binary'
       path: '/binary'
@@ -403,6 +442,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAppsRoute: typeof AuthenticatedAppsRoute
   AuthenticatedAviatorRoute: typeof AuthenticatedAviatorRoute
   AuthenticatedBinaryRoute: typeof AuthenticatedBinaryRoute
+  AuthenticatedBotBuilderRoute: typeof AuthenticatedBotBuilderRoute
   AuthenticatedCryptoRoute: typeof AuthenticatedCryptoRoute
   AuthenticatedForexRoute: typeof AuthenticatedForexRoute
   AuthenticatedPositionsRoute: typeof AuthenticatedPositionsRoute
@@ -418,6 +458,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAppsRoute: AuthenticatedAppsRoute,
   AuthenticatedAviatorRoute: AuthenticatedAviatorRoute,
   AuthenticatedBinaryRoute: AuthenticatedBinaryRoute,
+  AuthenticatedBotBuilderRoute: AuthenticatedBotBuilderRoute,
   AuthenticatedCryptoRoute: AuthenticatedCryptoRoute,
   AuthenticatedForexRoute: AuthenticatedForexRoute,
   AuthenticatedPositionsRoute: AuthenticatedPositionsRoute,
@@ -436,6 +477,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AdminSetupRoute: AdminSetupRoute,
   AuthRoute: AuthRoute,
+  ChangePasswordRoute: ChangePasswordRoute,
   ApiDarajaB2cResultRoute: ApiDarajaB2cResultRoute,
   ApiDarajaB2cTimeoutRoute: ApiDarajaB2cTimeoutRoute,
   ApiDarajaStkCallbackRoute: ApiDarajaStkCallbackRoute,

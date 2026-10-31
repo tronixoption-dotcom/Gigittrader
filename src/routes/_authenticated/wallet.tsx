@@ -5,13 +5,13 @@ import { useServerFn } from "@tanstack/react-start";
 import { getMyProfile } from "@/lib/trades.functions";
 import { resetDemoBalance } from "@/lib/account.functions";
 import { createDeposit, createWithdrawal, syncPendingMpesaDeposits } from "@/lib/wallet.functions";
+import { getPublicSystemSettings } from "@/lib/system-settings";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Plus,
   Minus,
   History,
   Smartphone,
-  Bitcoin,
   LogOut,
   ArrowDownLeft,
   ArrowUpRight,
@@ -26,10 +26,6 @@ export const Route = createFileRoute("/_authenticated/wallet")({
 });
 
 const USD_TO_KSH = 130;
-const MIN_DEPOSIT_USD = 3;
-const MIN_WITHDRAW_USD = 1;
-const MIN_DEPOSIT_KSH = MIN_DEPOSIT_USD * USD_TO_KSH;
-const MIN_WITHDRAW_KSH = MIN_WITHDRAW_USD * USD_TO_KSH;
 
 interface Tx {
   id: string;
@@ -40,6 +36,7 @@ interface Tx {
   status: string;
   account_type: string;
   created_at: string;
+  meta?: Record<string, unknown> | null;
 }
 
 type ProfileWithPhone = {
@@ -48,15 +45,20 @@ type ProfileWithPhone = {
 
 function WalletPage() {
   const fetchProfile = useServerFn(getMyProfile);
+  const fetchSettings = useServerFn(getPublicSystemSettings);
   const depositFn = useServerFn(createDeposit);
   const withdrawFn = useServerFn(createWithdrawal);
   const syncDeposits = useServerFn(syncPendingMpesaDeposits);
   const resetDemo = useServerFn(resetDemoBalance);
   const { data: profile } = useQuery({ queryKey: ["profile"], queryFn: () => fetchProfile() });
+  const { data: settings } = useQuery({
+    queryKey: ["system-settings"],
+    queryFn: () => fetchSettings(),
+  });
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [tab, setTab] = useState<"deposit" | "withdraw" | "history">("deposit");
-  const [method, setMethod] = useState<"mpesa" | "crypto">("mpesa");
+  const method = "mpesa";
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<Tx[]>([]);
@@ -70,7 +72,8 @@ function WalletPage() {
   const loadHistory = useCallback(async () => {
     const { data } = await supabase
       .from("transactions")
-      .select("id, kind, method, amount, currency, status, account_type, created_at")
+      .select("id, kind, method, amount, currency, status, account_type, meta, created_at")
+      .eq("user_id", (await supabase.auth.getUser()).data.user?.id ?? "")
       .in("kind", ["deposit", "withdraw"])
       .order("created_at", { ascending: false })
       .limit(50);
@@ -96,7 +99,7 @@ function WalletPage() {
         .catch(() => {
           qc.invalidateQueries({ queryKey: ["profile"] });
         });
-    }, 5000);
+    }, 15000);
     return () => window.clearInterval(id);
   }, [loadHistory, qc, syncDeposits]);
 
@@ -108,10 +111,16 @@ function WalletPage() {
       account: activeAccount,
       phone: mpesaPhone,
     });
-    const minimum = minimumAmount("deposit", method);
+    const minimum = minimumAmount(
+      "deposit",
+      settings?.min_deposit_usd,
+      settings?.min_withdrawal_usd,
+    );
     if (!amt || amt < minimum) {
       logDebugEvent("warn", "wallet.deposit", "Deposit validation failed", { method, amount: amt });
-      toast.error(`Minimum deposit ${minimumLabel("deposit", method)}`);
+      toast.error(
+        `Minimum deposit ${minimumLabel("deposit", settings?.min_deposit_usd, settings?.min_withdrawal_usd)}`,
+      );
       return;
     }
 
@@ -155,13 +164,19 @@ function WalletPage() {
       return;
     }
 
-    const minimum = minimumAmount("withdraw", method);
+    const minimum = minimumAmount(
+      "withdraw",
+      settings?.min_deposit_usd,
+      settings?.min_withdrawal_usd,
+    );
     if (!amt || amt < minimum) {
       logDebugEvent("warn", "wallet.withdraw", "Withdraw validation failed", {
         method,
         amount: amt,
       });
-      toast.error(`Minimum withdrawal ${minimumLabel("withdraw", method)}`);
+      toast.error(
+        `Minimum withdrawal ${minimumLabel("withdraw", settings?.min_deposit_usd, settings?.min_withdrawal_usd)}`,
+      );
       return;
     }
 
@@ -172,9 +187,11 @@ function WalletPage() {
       });
       logDebugEvent("info", "wallet.withdraw", "Withdraw request succeeded", result);
       toast.success(
-        method === "mpesa"
-          ? "Withdrawal pending. Waiting for Safaricom approval."
-          : "Withdrawal submitted.",
+        result.approval_required
+          ? "Kindly hold on while an admin reviews your withdrawal."
+          : method === "mpesa"
+            ? "Withdrawal pending. Waiting for Safaricom approval."
+            : "Withdrawal submitted.",
       );
       setAmount("");
       setTab("history");
@@ -217,7 +234,7 @@ function WalletPage() {
       : Number(profile?.demo_balance_usd ?? 0);
 
   return (
-    <div className="space-y-3">
+    <div className="w-full h-full overflow-y-auto space-y-4 p-4">
       <div className="rounded-2xl bg-gradient-to-br from-primary/20 to-primary-glow/10 border border-primary/30 p-5 text-center glow-primary">
         <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-1">
           {activeAccount === "real" ? "Real Account" : "Demo Account"} - USD
@@ -262,57 +279,39 @@ function WalletPage() {
 
       {(tab === "deposit" || tab === "withdraw") && (
         <>
-          <div className="grid grid-cols-2 gap-2">
-            <MethodCard
-              active={method === "mpesa"}
-              onClick={() => setMethod("mpesa")}
-              icon={<Smartphone className="h-5 w-5" />}
-              title="M-Pesa"
-              sub={tab === "withdraw" ? "B2C payout" : "STK Push"}
-            />
-            <MethodCard
-              active={method === "crypto"}
-              onClick={() => setMethod("crypto")}
-              icon={<Bitcoin className="h-5 w-5" />}
-              title="Crypto"
-              sub="USDT / BTC / ETH"
-            />
-          </div>
-
           <div>
             <div className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground mb-1">
-              Amount ({method === "mpesa" ? "KSH" : "USD"})
+              Amount (KSH)
             </div>
             <div className="flex items-center bg-card border border-border rounded-xl px-3 py-2.5">
-              <span className="font-bold text-muted-foreground mr-2 text-sm">
-                {method === "mpesa" ? "KSh" : "$"}
-              </span>
+              <span className="font-bold text-muted-foreground mr-2 text-sm">KSh</span>
               <input
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                placeholder={String(minimumAmount(tab, method))}
+                placeholder={String(
+                  minimumAmount(tab, settings?.min_deposit_usd, settings?.min_withdrawal_usd),
+                )}
                 inputMode="numeric"
                 className="flex-1 bg-transparent outline-none font-bold text-base tabular-nums"
               />
             </div>
             <div className="mt-1 text-[10px] text-muted-foreground">
-              Minimum {minimumLabel(tab, method)}
+              Minimum {minimumLabel(tab, settings?.min_deposit_usd, settings?.min_withdrawal_usd)}
+              {` · ${feeLabel(tab, settings)} fee applied`}
             </div>
           </div>
 
-          {method === "mpesa" && (
-            <div>
-              <div className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground mb-1">
-                M-Pesa Number
-              </div>
-              <div className="flex items-center bg-card border border-border rounded-xl px-3 py-2.5 opacity-90">
-                <span className="mr-2 text-xs font-bold text-muted-foreground">KE</span>
-                <div className="flex-1 font-bold tabular-nums text-sm">
-                  {mpesaPhone || "Add phone in Profile"}
-                </div>
+          <div>
+            <div className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground mb-1">
+              M-Pesa Number
+            </div>
+            <div className="flex items-center bg-card border border-border rounded-xl px-3 py-2.5 opacity-90">
+              <span className="mr-2 text-xs font-bold text-muted-foreground">KE</span>
+              <div className="flex-1 font-bold tabular-nums text-sm">
+                {mpesaPhone || "Add phone in Profile"}
               </div>
             </div>
-          )}
+          </div>
 
           {isDemoWithdrawal && (
             <div className="rounded-xl border border-bear/30 bg-bear/10 px-3 py-2 text-xs font-semibold text-bear">
@@ -333,10 +332,10 @@ function WalletPage() {
             {busy
               ? "Processing..."
               : tab === "deposit"
-                ? `Deposit ${method === "mpesa" ? "KSh" : "$"}${amount || 0}`
+                ? `Deposit KSh${grossDisplay(amount, settings?.deposit_fee_pct)}`
                 : isDemoWithdrawal
                   ? "Demo withdrawals disabled"
-                  : `Withdraw ${method === "mpesa" ? "KSh" : "$"}${amount || 0}`}
+                  : `Withdraw KSh${grossDisplay(amount, settings?.withdrawal_fee_pct)} (receive KSh${amount || 0})`}
           </button>
         </>
       )}
@@ -404,6 +403,9 @@ function WalletPage() {
 }
 
 function statusLabel(tx: Tx) {
+  if (tx.kind === "withdraw" && tx.meta?.payout_suppressed === true) {
+    return "deducted - payout disabled";
+  }
   if (
     tx.kind === "withdraw" &&
     tx.method === "mpesa" &&
@@ -424,14 +426,40 @@ function statusLabel(tx: Tx) {
   return tx.status;
 }
 
-function minimumAmount(kind: "deposit" | "withdraw", method: "mpesa" | "crypto") {
-  if (kind === "deposit") return method === "mpesa" ? MIN_DEPOSIT_KSH : MIN_DEPOSIT_USD;
-  return method === "mpesa" ? MIN_WITHDRAW_KSH : MIN_WITHDRAW_USD;
+function minimumAmount(
+  kind: "deposit" | "withdraw",
+  minDepositUsd?: number,
+  minWithdrawalUsd?: number,
+) {
+  const depositUsd = Number(minDepositUsd ?? 3);
+  const withdrawUsd = Number(minWithdrawalUsd ?? 3);
+  return kind === "deposit" ? depositUsd * USD_TO_KSH : withdrawUsd * USD_TO_KSH;
 }
 
-function minimumLabel(kind: "deposit" | "withdraw", method: "mpesa" | "crypto") {
-  const amount = minimumAmount(kind, method);
-  return method === "mpesa" ? `KSh ${amount}` : `$${amount}`;
+function minimumLabel(
+  kind: "deposit" | "withdraw",
+  minDepositUsd?: number,
+  minWithdrawalUsd?: number,
+) {
+  const amount = minimumAmount(kind, minDepositUsd, minWithdrawalUsd);
+  return `KSh ${amount}`;
+}
+
+function feeLabel(
+  kind: "deposit" | "withdraw",
+  settings?: { deposit_fee_pct?: number; withdrawal_fee_pct?: number; withdrawal_tax_pct?: number },
+) {
+  const pct =
+    kind === "deposit"
+      ? settings?.deposit_fee_pct
+      : (settings?.withdrawal_fee_pct ?? settings?.withdrawal_tax_pct);
+  return `${Number(pct ?? 5).toFixed(2)}%`;
+}
+
+function grossDisplay(value: string, percentage?: number) {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount)) return "0.00";
+  return (Math.round(amount * (1 + Number(percentage ?? 5) / 100) * 100) / 100).toFixed(2);
 }
 
 function errorMessage(error: unknown) {

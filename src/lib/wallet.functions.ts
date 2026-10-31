@@ -1,15 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { readSystemSettings, type SystemSettings } from "@/lib/system-settings";
 
 const USD_TO_KSH = 130;
-const MIN_DEPOSIT_USD = 3;
-const MIN_WITHDRAW_USD = 1;
-const MIN_DEPOSIT_KSH = MIN_DEPOSIT_USD * USD_TO_KSH;
-const MIN_WITHDRAW_KSH = MIN_WITHDRAW_USD * USD_TO_KSH;
+const darajaTokenCache = new Map<DarajaMode, { token: string; expiresAt: number }>();
 
 const MoneyInput = z.object({
-  method: z.enum(["mpesa", "crypto"]),
+  method: z.enum(["mpesa"]),
   amount: z.number().positive().max(10_000_000),
   account: z.enum(["real", "demo"]),
   phone: z.string().optional(),
@@ -22,7 +20,7 @@ type WalletTransaction = {
   id: string;
   user_id: string;
   kind: TransactionKind;
-  method: "mpesa" | "crypto";
+  method: "mpesa";
   amount: number | string;
   currency: "KSH" | "USD";
   amount_usd: number | string;
@@ -34,21 +32,32 @@ type WalletTransaction = {
 type DarajaMode = "stk" | "b2c";
 type DarajaStep = "oauth_token" | "stk_push" | "b2c_payment";
 
+type WalletRpcClient = {
+  rpc: (
+    name: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ error: { message?: string } | null }>;
+};
+
 export const createDeposit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((d: unknown) => MoneyInput.parse(d))
+  .inputValidator((d: unknown) => MoneyInput.parse(d))
   .handler(async ({ data, context }) => {
+    const settings = await readSystemSettings();
     const phone = data.method === "mpesa" ? await getProfilePhone(context.userId) : data.phone;
-    validateMoney("deposit", data.method, data.amount, phone);
+    validateMoney("deposit", data.method, data.amount, phone, settings);
 
-    const tx = await createWalletTransaction({
-      userId: context.userId,
-      kind: "deposit",
-      method: data.method,
-      amount: data.amount,
-      account: data.account,
-      phone,
-    });
+    const tx = await createWalletTransaction(
+      {
+        userId: context.userId,
+        kind: "deposit",
+        method: data.method,
+        amount: data.amount,
+        account: data.account,
+        phone,
+      },
+      settings,
+    );
 
     if (data.method === "mpesa" && data.account === "real") {
       try {
@@ -65,35 +74,91 @@ export const createDeposit = createServerFn({ method: "POST" })
 
 export const createWithdrawal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((d: unknown) => MoneyInput.parse(d))
+  .inputValidator((d: unknown) => MoneyInput.parse(d))
   .handler(async ({ data, context }) => {
     if (data.account === "demo") {
       throw new Error("Demo funds cannot be withdrawn. Switch to your real account to withdraw.");
     }
 
-    const phone = data.method === "mpesa" ? await getProfilePhone(context.userId) : data.phone;
-    validateMoney("withdraw", data.method, data.amount, phone);
+    // Internal accounts can never withdraw. Keep this guard before any
+    // balance reservation or payment-provider call.
+    if (await hasInternalRole(context.userId)) {
+      await recordBlockedWithdrawalAttempt(context.userId, data.amount, "internal_role");
+      throw new Error("Withdrawals are disabled for admin and agent accounts.");
+    }
 
-    const tx = await createWalletTransaction({
-      userId: context.userId,
-      kind: "withdraw",
-      method: data.method,
-      amount: data.amount,
-      account: data.account,
-      phone,
-    });
+    const settings = await readSystemSettings();
+    const feePct = settings.withdrawal_fee_pct ?? settings.withdrawal_tax_pct;
+    const feeAmount = calculateFee(data.amount, feePct);
+    const grossAmount = roundMoney(data.amount + feeAmount);
+    // Agent payout switches do not control client withdrawals. Clients use
+    // the automatic payout path; admin/agent accounts were blocked above.
+    const payoutSuppressed = false;
+    const phone =
+      data.method === "mpesa" && !payoutSuppressed
+        ? await getProfilePhone(context.userId)
+        : data.phone;
+    validateMoney("withdraw", data.method, data.amount, phone, settings, !payoutSuppressed);
+    const amountUsd = toUsd(grossAmount, "KSH");
+    const totalDepositedUsd = await getCompletedRealDepositTotal(context.userId);
+    const realTradeCount = await getRealTradeCount(context.userId);
+    if (totalDepositedUsd === 0 && realTradeCount === 0) {
+      await freezeSuspiciousWithdrawal(context.userId, {
+        requested_amount_usd: amountUsd,
+        total_deposited_usd: totalDepositedUsd,
+        real_trade_count: realTradeCount,
+      });
+      throw new Error("Withdrawal flagged for review and the account has been frozen.");
+    }
+    // Require admin approval for high-risk withdrawals; ordinary withdrawals
+    // continue through the automatic provider payout path.
+    const approvalRequired =
+      data.method === "mpesa" &&
+      data.account === "real" &&
+      amountUsd > totalDepositedUsd;
+
+    const tx = await createWalletTransaction(
+      {
+        userId: context.userId,
+        kind: "withdraw",
+        method: data.method,
+        amount: data.amount,
+        account: data.account,
+        phone,
+        meta: {
+          admin_approval_required: approvalRequired,
+          approval_status: approvalRequired ? "pending" : "not_required",
+          total_deposited_usd_at_request: totalDepositedUsd,
+          requested_amount_usd: toUsd(data.amount, "KSH"),
+          gross_amount: grossAmount,
+          fee_amount: feeAmount,
+          fee_pct: feePct,
+          payout_suppressed: payoutSuppressed,
+          payout_suppressed_reason: payoutSuppressed ? "agent_withdrawals_disabled" : null,
+        },
+      },
+      settings,
+    );
+
+    if (approvalRequired) {
+      return { ok: true, transaction: tx, approval_required: true };
+    }
+
+    if (payoutSuppressed) {
+      return { ok: true, transaction: tx, payout_suppressed: true, approval_required: false };
+    }
 
     if (data.method === "mpesa" && data.account === "real") {
       try {
-        const daraja = await sendB2cPayment(tx, phone);
-        return { ok: true, transaction: tx, daraja };
+        const daraja = await sendB2cPayment(tx, phone, data.amount);
+        return { ok: true, transaction: tx, daraja, approval_required: false };
       } catch (error) {
         await markTransaction(tx.id, "failed", { provider_error: getErrorMessage(error) });
         throw error;
       }
     }
 
-    return { ok: true, transaction: tx };
+    return { ok: true, transaction: tx, approval_required: false };
   });
 
 export const syncPendingMpesaDeposits = createServerFn({ method: "POST" })
@@ -154,24 +219,33 @@ export const syncPendingMpesaDeposits = createServerFn({ method: "POST" })
     return { ok: true, synced };
   });
 
-async function createWalletTransaction(input: {
-  userId: string;
-  kind: TransactionKind;
-  method: "mpesa" | "crypto";
-  amount: number;
-  account: "real" | "demo";
-  phone?: string;
-}) {
+async function createWalletTransaction(
+  input: {
+    userId: string;
+    kind: TransactionKind;
+    method: "mpesa";
+    amount: number;
+    account: "real" | "demo";
+    phone?: string;
+    meta?: Record<string, unknown>;
+  },
+  settings: SystemSettings,
+) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   if (input.kind === "withdraw" && input.account === "demo") {
     throw new Error("Demo funds cannot be withdrawn. Switch to your real account to withdraw.");
   }
 
   const currency = input.method === "mpesa" ? "KSH" : "USD";
-  const amountUsd = toUsd(input.amount, currency);
+  const feePct = input.kind === "deposit" ? settings.deposit_fee_pct : settings.withdrawal_fee_pct;
+  const feeAmount = calculateFee(input.amount, feePct);
+  const grossAmount = roundMoney(input.amount + feeAmount);
+  const amountUsd = toUsd(input.kind === "withdraw" ? grossAmount : input.amount, currency);
+  const netAmount = input.amount;
   const isVirtual = input.account === "demo";
   const providerPending = input.method === "mpesa" && input.account === "real";
-  const status = providerPending ? "pending" : "completed";
+  const payoutSuppressed = input.meta?.payout_suppressed === true;
+  const status = providerPending && !payoutSuppressed ? "pending" : "completed";
 
   if (input.kind === "withdraw") {
     const { data: profile, error } = await supabaseAdmin
@@ -197,14 +271,19 @@ async function createWalletTransaction(input: {
       kind: input.kind,
       method: input.method,
       account_type: input.account,
-      amount: input.amount,
+      amount: input.kind === "withdraw" ? grossAmount : input.amount,
       currency,
       amount_usd: amountUsd,
       status,
       is_virtual: isVirtual,
       meta: {
-        phone: input.method === "mpesa" ? normalizeKenyanPhone(input.phone) : null,
+        ...(input.meta ?? {}),
+        phone: input.method === "mpesa" && input.phone ? normalizeKenyanPhone(input.phone) : null,
         usd_to_ksh: USD_TO_KSH,
+        fee_pct: feePct,
+        fee_amount: feeAmount,
+        gross_amount: grossAmount,
+        net_amount: netAmount,
       },
     } as Record<string, unknown>)
     .select("*")
@@ -224,6 +303,134 @@ async function createWalletTransaction(input: {
   return tx as WalletTransaction;
 }
 
+export async function releaseApprovedWithdrawalTransaction({
+  transactionId,
+  adminUserId,
+}: {
+  transactionId: string;
+  adminUserId: string;
+}) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const settings = await readSystemSettings();
+  const { data: row, error } = await supabaseAdmin
+    .from("transactions")
+    .select("*")
+    .eq("id", transactionId)
+    .single();
+  if (error || !row) throw new Error(error?.message ?? "Withdrawal not found");
+
+  const transaction = row as unknown as WalletTransaction;
+  if (transaction.kind !== "withdraw" || transaction.account_type !== "real") {
+    throw new Error("Only real withdrawal requests can be approved");
+  }
+  if (await hasInternalRole(transaction.user_id)) {
+    await markTransaction(transaction.id, "cancelled", {
+      approval_status: "blocked_internal_role",
+      payout_suppressed: true,
+      payout_suppressed_reason: "admin_or_agent_withdrawals_disabled",
+    });
+    return { ok: true, transaction_id: transaction.id, payout_suppressed: true };
+  }
+  if (!["pending", "processing"].includes(transaction.status)) {
+    throw new Error("This withdrawal is no longer pending approval");
+  }
+  if (!transaction.meta?.admin_approval_required) {
+    throw new Error("This withdrawal does not require admin approval");
+  }
+
+  const phone =
+    getStringValue(transaction.meta?.phone) ?? (await getProfilePhone(transaction.user_id));
+  const payoutAmount = Number(transaction.meta?.net_amount ?? transaction.amount);
+
+  await markTransaction(transaction.id, "processing", {
+    approval_status: "approved",
+    approved_by: adminUserId,
+    approved_at: new Date().toISOString(),
+  });
+
+  try {
+    const daraja = await sendB2cPayment(transaction, phone, payoutAmount);
+    return { ok: true, transaction_id: transaction.id, daraja };
+  } catch (error) {
+    await markTransaction(transaction.id, "failed", {
+      approval_status: "approved_provider_failed",
+      provider_error: getErrorMessage(error),
+    });
+    throw error;
+  }
+}
+
+async function getCompletedRealDepositTotal(userId: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data, error } = await supabaseAdmin
+    .from("transactions")
+    .select("amount_usd")
+    .eq("user_id", userId)
+    .eq("kind", "deposit")
+    .eq("account_type", "real")
+    .eq("status", "completed")
+    .eq("is_virtual", false);
+  if (error) throw new Error(error.message);
+  return (data ?? []).reduce(
+    (sum, row) => sum + Number((row as { amount_usd?: number | string | null }).amount_usd ?? 0),
+    0,
+  );
+}
+
+async function getRealTradeCount(userId: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { count, error } = await supabaseAdmin
+    .from("trades")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("account_type", "real");
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+async function freezeSuspiciousWithdrawal(
+  userId: string,
+  details: Record<string, unknown>,
+) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const note = "Automatic fraud hold: withdrawal exceeded deposits or had no deposit/trade history.";
+  const { error } = await supabaseAdmin
+    .from("profiles")
+    .update({ account_state: "frozen", freeze_until: null, moderation_note: note })
+    .eq("id", userId);
+  if (error) throw new Error(error.message);
+  await (supabaseAdmin as any).from("audit_events").insert({
+    actor_user_id: userId,
+    event_type: "suspicious_withdrawal_frozen",
+    entity_type: "user",
+    entity_id: userId,
+    details: { ...details, note },
+  });
+}
+
+async function hasInternalRole(userId: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data, error } = await supabaseAdmin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .in("role", ["admin", "agent"]);
+  if (error) throw new Error(error.message);
+  return (data ?? []).length > 0;
+}
+
+async function recordBlockedWithdrawalAttempt(userId: string, amount: number, reason: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const now = new Date().toISOString();
+  await (supabaseAdmin as any).from("audit_events").insert({
+    actor_user_id: userId,
+    event_type: "withdrawal_blocked",
+    entity_type: "user",
+    entity_id: userId,
+    details: { amount, reason, at: now },
+  });
+}
+
 async function sendStkPush(transaction: WalletTransaction, phone?: string) {
   const msisdn = normalizeKenyanPhone(phone);
   const env = getDarajaEnv("stk");
@@ -236,12 +443,12 @@ async function sendStkPush(transaction: WalletTransaction, phone?: string) {
     Password: password,
     Timestamp: timestamp,
     TransactionType: "CustomerPayBillOnline",
-    Amount: Math.round(Number(transaction.amount)),
+    Amount: Math.round(Number(transaction.meta?.gross_amount ?? transaction.amount)),
     PartyA: msisdn,
     PartyB: env.stkShortcode,
     PhoneNumber: msisdn,
     CallBackURL: env.stkCallbackUrl,
-    AccountReference: `TRONIX-${transaction.id.slice(0, 8)}`,
+    AccountReference: `DIGITTRADER-${transaction.id.slice(0, 8)}`,
     TransactionDesc: "DIGIT TRADER deposit",
   };
 
@@ -283,28 +490,38 @@ async function queryStkStatus(checkoutRequestId: string) {
   return json as Record<string, unknown>;
 }
 
-async function sendB2cPayment(transaction: WalletTransaction, phone?: string) {
+async function sendB2cPayment(
+  transaction: WalletTransaction,
+  phone?: string,
+  payoutAmount?: number,
+) {
   const msisdn = normalizeKenyanPhone(phone);
   const env = getDarajaEnv("b2c");
   const payload = {
     InitiatorName: env.b2cInitiatorName,
     SecurityCredential: env.b2cSecurityCredential,
     CommandID: env.b2cCommandId,
-    Amount: Math.round(Number(transaction.amount)),
+    Amount: Math.round(Number(payoutAmount ?? transaction.amount)),
     PartyA: env.b2cShortcode,
     PartyB: msisdn,
     Remarks: "DIGIT TRADER withdrawal",
     QueueTimeOutURL: env.b2cTimeoutUrl,
     ResultURL: env.b2cResultUrl,
-    Occasion: `TRONIX-${transaction.id.slice(0, 8)}`,
+    Occasion: `DIGITTRADER-${transaction.id.slice(0, 8)}`,
   };
 
   const response = await darajaRequest("/mpesa/b2c/v1/paymentrequest", payload, "b2c");
   if (response.ResponseCode && response.ResponseCode !== "0") {
-    throw new Error(response.ResponseDescription ?? response.errorMessage ?? "B2C payment rejected");
+    throw new Error(
+      response.ResponseDescription ?? response.errorMessage ?? "B2C payment rejected",
+    );
   }
 
   await recordPaymentRequest(transaction.id, "b2c", msisdn, payload, response);
+  // Match the previously deployed payout flow: Daraja's acceptance response
+  // releases the withdrawal instead of leaving the reserved balance stuck.
+  // A later failure/timeout callback still transitions it to failed and refunds
+  // the reservation through apply_transaction.
   await markTransaction(transaction.id, "completed", {
     daraja_request_sent: true,
     b2c_request_accepted: true,
@@ -328,6 +545,7 @@ async function darajaRequest(path: string, payload: Record<string, unknown>, mod
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(15_000),
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -338,15 +556,23 @@ async function darajaRequest(path: string, payload: Record<string, unknown>, mod
 
 async function getDarajaToken(mode: DarajaMode) {
   const env = getDarajaEnv(mode);
+  const cached = darajaTokenCache.get(mode);
+  if (cached && cached.expiresAt > Date.now() + 30_000) return cached.token;
   const credentials = Buffer.from(`${env.consumerKey}:${env.consumerSecret}`).toString("base64");
   const res = await fetch(`${env.baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
     headers: { Authorization: `Basic ${credentials}` },
+    signal: AbortSignal.timeout(10_000),
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok || !json.access_token) {
     throw new Error(formatDarajaError(mode, "oauth_token", res.status, json, env.baseUrl));
   }
-  return json.access_token as string;
+  const token = json.access_token as string;
+  darajaTokenCache.set(mode, {
+    token,
+    expiresAt: Date.now() + Math.max(60, Number(json.expires_in ?? 3600) - 60) * 1000,
+  });
+  return token;
 }
 
 async function adjustBalance(
@@ -357,29 +583,20 @@ async function adjustBalance(
   kshDelta: number,
 ) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data: profile, error } = await supabaseAdmin
-    .from("profiles")
-    .select("balance_usd, demo_balance_usd, balance_ksh")
-    .eq("id", userId)
-    .single();
-  if (error || !profile) throw new Error("Profile not found");
+  const { error } = await (supabaseAdmin as unknown as WalletRpcClient).rpc(
+    "adjust_wallet_balance",
+    {
+      _user_id: userId,
+      _account_type: account,
+      _usd_delta: usdDelta,
+      _ksh_delta: currency === "KSH" ? kshDelta : 0,
+    },
+  );
+  if (error) throw new Error(error.message);
+}
 
-  const update =
-    account === "real"
-      ? {
-          balance_usd: Number(profile.balance_usd ?? 0) + usdDelta,
-          balance_ksh: Number(profile.balance_ksh ?? 0) + (currency === "KSH" ? kshDelta : 0),
-        }
-      : {
-          demo_balance_usd: Number(profile.demo_balance_usd ?? 0) + usdDelta,
-          balance_ksh: Number(profile.balance_ksh ?? 0) + (currency === "KSH" ? kshDelta : 0),
-        };
-
-  const { error: updateError } = await supabaseAdmin
-    .from("profiles")
-    .update(update as Record<string, unknown>)
-    .eq("id", userId);
-  if (updateError) throw new Error(updateError.message);
+function calculateFee(amount: number, percentage: number) {
+  return roundMoney((amount * Math.max(0, Math.min(100, Number(percentage ?? 0)))) / 100);
 }
 
 async function markTransaction(
@@ -388,11 +605,12 @@ async function markTransaction(
   meta: Record<string, unknown>,
 ) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  await supabaseAdmin.rpc("apply_transaction", {
+  const { error } = await supabaseAdmin.rpc("apply_transaction", {
     _transaction_id: transactionId,
     _status: status,
     _meta: meta,
   });
+  if (error) throw new Error(error.message);
 }
 
 async function recordPaymentRequest(
@@ -434,21 +652,19 @@ async function markPaymentRequestStatus(
 
 function validateMoney(
   kind: TransactionKind,
-  method: "mpesa" | "crypto",
+  method: "mpesa",
   amount: number,
   phone?: string,
+  settings?: SystemSettings,
+  requirePhone = true,
 ) {
-  const minUsd = kind === "deposit" ? MIN_DEPOSIT_USD : MIN_WITHDRAW_USD;
-  const minKsh = kind === "deposit" ? MIN_DEPOSIT_KSH : MIN_WITHDRAW_KSH;
-  const minimum = method === "mpesa" ? minKsh : minUsd;
-  if (amount < minimum) {
-    throw new Error(
-      method === "mpesa"
-        ? `Minimum ${kind} is KSh ${minKsh} ($${minUsd})`
-        : `Minimum ${kind} is $${minUsd}`,
-    );
+  const minUsd =
+    kind === "deposit" ? (settings?.min_deposit_usd ?? 3) : (settings?.min_withdrawal_usd ?? 3);
+  const minKsh = minUsd * USD_TO_KSH;
+  if (amount < minKsh) {
+    throw new Error(`Minimum ${kind} is KSh ${minKsh} ($${minUsd})`);
   }
-  if (method === "mpesa") normalizeKenyanPhone(phone);
+  if (requirePhone) normalizeKenyanPhone(phone);
 }
 
 async function getProfilePhone(userId: string) {
@@ -491,6 +707,7 @@ function getDarajaEnv(mode: DarajaMode) {
   const baseUrl = normalizeDarajaBaseUrl(
     readEnv("DARAJA_BASE_URL") ?? "https://sandbox.safaricom.co.ke",
   );
+  assertDarajaEnvironment(mode, baseUrl);
   const appUrl = getPublicAppUrl();
   const shared = {
     consumerKey: readEnv("DARAJA_CONSUMER_KEY"),
@@ -531,12 +748,27 @@ function readEnv(name: string) {
   const value = process.env[name]?.trim();
   if (!value) return undefined;
   const quoted =
-    (value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"));
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"));
   return quoted ? value.slice(1, -1).trim() : value;
 }
 
 function normalizeDarajaBaseUrl(value: string) {
   return value.replace(/\/+$/, "");
+}
+
+function assertDarajaEnvironment(mode: DarajaMode, baseUrl: string) {
+  const isProdRuntime =
+    process.env.NODE_ENV === "production" ||
+    process.env.VERCEL_ENV === "production" ||
+    process.env.NITRO_PRESET === "vercel";
+  const usesSandbox = /sandbox/i.test(baseUrl);
+
+  if (isProdRuntime && usesSandbox) {
+    throw new Error(
+      `Deposits are blocked because Daraja is configured for sandbox in production. Update DARAJA_BASE_URL and the related shortcode/keys to production values before processing ${mode.toUpperCase()} payments.`,
+    );
+  }
 }
 
 function formatDarajaError(

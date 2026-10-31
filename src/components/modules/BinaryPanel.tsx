@@ -1,888 +1,1685 @@
-import { useEffect, useRef, useState } from "react";
-import { LiveChart } from "@/components/LiveChart";
-import { Plus, Minus, Bot, User, Square, ChevronDown, CandlestickChart, LineChart } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { placeTrade, settleTrade } from "@/lib/trades.functions";
-import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { logDebugEvent, serializeError } from "@/lib/debug-logger";
+import {
+  LineChart as RCLineChart,
+  Line,
+  YAxis,
+  CartesianGrid,
+  ResponsiveContainer,
+  ReferenceLine,
+  ComposedChart,
+  Bar,
+} from "recharts";
+import {
+  ChevronDown,
+  TrendingUp,
+  BarChart3,
+  Palette,
+  Download,
+  Plus,
+  Minus,
+  Crosshair,
+  Target,
+  CandlestickChart,
+  LineChart as LineIcon,
+  Sparkles,
+  StopCircle,
+} from "lucide-react";
 
-const VOL_INDICES = [
-  {
-    label: "Volatility 10 Index",
-    value: "Vol 10",
-    basePrice: 1000,
-    volatility: 0.00024,
-    tickMs: 2368,
-    rhythm: [2100, 1800, 1200, 2200, 900],
-  },
-  {
-    label: "Volatility 25 Index",
-    value: "Vol 25",
-    basePrice: 1000,
-    volatility: 0.00038,
-    tickMs: 2048,
-    rhythm: [1800, 1300, 900, 1600, 520],
-  },
-  {
-    label: "Volatility 50 Index",
-    value: "Vol 50",
-    basePrice: 1000,
-    volatility: 0.00058,
-    tickMs: 1728,
-    rhythm: [1500, 880, 620, 1200, 420],
-  },
-  {
-    label: "Volatility 75 Index",
-    value: "Vol 75",
-    basePrice: 1000,
-    volatility: 0.00078,
-    tickMs: 1440,
-    rhythm: [1200, 640, 420, 900, 320],
-  },
-  {
-    label: "Volatility 100 Index",
-    value: "Vol 100",
-    basePrice: 1000,
-    volatility: 0.001,
-    tickMs: 1216,
-    rhythm: [980, 520, 360, 740, 260],
-  },
-  {
-    label: "Volatility 10 (1s) Index",
-    value: "Vol 10 (1s)",
-    basePrice: 1000,
-    volatility: 0.00036,
-    tickMs: 1280,
-    rhythm: [2000, 1400, 650, 420, 250],
-  },
-  {
-    label: "Volatility 25 (1s) Index",
-    value: "Vol 25 (1s)",
-    basePrice: 1000,
-    volatility: 0.00054,
-    tickMs: 1280,
-    rhythm: [1600, 900, 500, 300, 220],
-  },
-  {
-    label: "Volatility 50 (1s) Index",
-    value: "Vol 50 (1s)",
-    basePrice: 1000,
-    volatility: 0.00072,
-    tickMs: 1280,
-    rhythm: [1300, 760, 440, 260, 190],
-  },
-  {
-    label: "Volatility 75 (1s) Index",
-    value: "Vol 75 (1s)",
-    basePrice: 1000,
-    volatility: 0.00094,
-    tickMs: 1280,
-    rhythm: [1100, 620, 340, 220, 170],
-  },
-  {
-    label: "Volatility 100 (1s) Index",
-    value: "Vol 100 (1s)",
-    basePrice: 1000,
-    volatility: 0.00115,
-    tickMs: 1280,
-    rhythm: [900, 500, 280, 190, 150],
-  },
-  {
-    label: "Crash 500 Index",
-    value: "Crash 500",
-    basePrice: 500,
-    volatility: 0.00066,
-    tickMs: 832,
-    rhythm: [1900, 1450, 900, 520, 760],
-  },
-  {
-    label: "Boom 500 Index",
-    value: "Boom 500",
-    basePrice: 500,
-    volatility: 0.00066,
-    tickMs: 832,
-    rhythm: [760, 520, 900, 1450, 1900],
-  },
-] as const;
-const TYPES = ["Buy/Sell", "Even/Odd", "Matches/Differs", "Over/Under"] as const;
-type TradeType = (typeof TYPES)[number];
-const QUICK = [1, 5, 10, 25, 50, 100];
-const DEFAULT_WIN_PROFIT_RATE = 0.2;
+import { useAccountMode } from "@/hooks/use-account-mode";
+import {
+  MARKETS,
+  MARKET_LIST,
+  CONTRACTS,
+  contractFor,
+  payoutMultiplier,
+  priceAt,
+  lastDigit,
+  type MarketId,
+  type ContractType,
+  type Direction,
+} from "@/lib/markets";
 
-type Tick = { d: number; tone: "neutral" | "bull" | "bear" };
+import {
+  placeTrade,
+  settleTrade,
+  settleDueTrades,
+  getWallet,
+  listMyTrades,
+  listMyTransactions,
+  cancelTrade,
+} from "@/lib/trades.functions";
+import { formatUSD, formatPrice } from "@/lib/format";
+
+const CHART_POINTS = 240;
+const DIGIT_WINDOW = 200; // ticks used to compute digit % distribution
+
+type PendingTrade = {
+  id: string;
+  settlesAt: number;
+  entryTickIndex: number;
+  exitTickIndex: number;
+  entryPrice: number;
+  digitTarget: number | null;
+  contractType: ContractType;
+  direction: Direction;
+  stakeCents: number;
+};
+
+type LastOutcome = {
+  digit: number;
+  won: boolean;
+  at: number;
+};
+
+// Per-tick outcome during a running contract (used to glow the digit circles as ticks land)
+type TickOutcome = { tickIndex: number; digit: number; won: boolean; final: boolean };
+
+type LoadedAutoBot = {
+  source: "builder" | "scanner";
+  label: string;
+  market: MarketId;
+  contractType: ContractType;
+  direction: Direction;
+  digit: number | null;
+  stake: string;
+  ticks: number;
+};
 
 export function BinaryPanel() {
-  const [index, setIndex] = useState("Vol 25");
-  const [type, setType] = useState<TradeType>("Buy/Sell");
-  const [marketOpen, setMarketOpen] = useState(false);
-  const [chartMode, setChartMode] = useState<"line" | "candles">("candles");
-  const [stake, setStake] = useState(10);
-  const [selectedDigit, setSelectedDigit] = useState(5);
-  const [botMode, setBotMode] = useState(false);
-  const [botRunning, setBotRunning] = useState(false);
-  const [target, setTarget] = useState(200);
-  const [stop, setStop] = useState(50);
-  const [martingale, setMartingale] = useState(2);
-  const [price, setPrice] = useState(1000);
-  const [pendingTrade, setPendingTrade] = useState<{
-    tradeId: string;
-    direction: string;
-    stake: number;
-    type: TradeType;
-    market: string;
-    entryPrice: number;
-    status: "open" | "settled";
-    result?: "win" | "loss";
-    pnl?: number;
-  } | null>(null);
-  const [settleNote, setSettleNote] = useState<string | null>(null);
-  const [placing, setPlacing] = useState(false);
-  const [tickTrail, setTickTrail] = useState<Tick[]>([]);
-  const [digitHistory, setDigitHistory] = useState<number[]>([]);
-
-  const place = useServerFn(placeTrade);
-  const settle = useServerFn(settleTrade);
   const qc = useQueryClient();
+  const chartShellRef = useRef<HTMLDivElement | null>(null);
+  const [marketId, setMarketId] = useState<MarketId>("V10_1S");
+  const [contractType, setContractType] = useState<ContractType>("even_odd");
+  const [direction, setDirection] = useState<Direction>("even");
+  const [ticks, setTicks] = useState(1);
+  const [stake, setStake] = useState("10");
+  const [digit, setDigit] = useState(5);
+  const [placing, setPlacing] = useState(false);
+  const [pendingTrade, setPendingTrade] = useState<PendingTrade | null>(null);
+  const [tickOutcomes, setTickOutcomes] = useState<TickOutcome[]>([]);
+  const [lastOutcome, setLastOutcome] = useState<LastOutcome | null>(null);
+  const [mode, setMode] = useState<"auto" | "manual">("manual");
+  const [stakeMode, setStakeMode] = useState<"stake" | "payout">("stake");
+  const [targetProfit, setTargetProfit] = useState("200");
+  const [targetLoss, setTargetLoss] = useState("999");
+  const [lossMultiple, setLossMultiple] = useState("2");
+  const [positionsTab, setPositionsTab] = useState<"open" | "closed" | "txns">("open");
+  const [marketMenuOpen, setMarketMenuOpen] = useState(false);
+  const [visiblePoints, setVisiblePoints] = useState(CHART_POINTS);
+  const [showReference, setShowReference] = useState(true);
+  const [showDots, setShowDots] = useState(false);
+  const [drawGuide, setDrawGuide] = useState(false);
+  const [chartType, setChartType] = useState<"candles" | "line">("candles");
+  const [autoBot, setAutoBot] = useState<LoadedAutoBot | null>(null);
+  const [autoTrading, setAutoTrading] = useState(false);
 
-  // refs for bot loop
-  const botRunningRef = useRef(false);
-  const sessionPnLRef = useRef(0);
-  const currentStakeRef = useRef(stake);
-  const activeDirectionRef = useRef<string | null>(null);
-  const indexRef = useRef(index);
-  const typeRef = useRef<TradeType>(type);
-  const selectedDigitRef = useRef(selectedDigit);
-  const priceRef = useRef(price);
-  const digitHistoryRef = useRef<number[]>([]);
-  const autoSignalConsumedRef = useRef(false);
-  useEffect(() => {
-    indexRef.current = index;
-  }, [index]);
-  useEffect(() => {
-    typeRef.current = type;
-  }, [type]);
-  useEffect(() => {
-    selectedDigitRef.current = selectedDigit;
-  }, [selectedDigit]);
-  useEffect(() => {
-    priceRef.current = price;
-  }, [price]);
-  useEffect(() => {
-    digitHistoryRef.current = digitHistory;
-  }, [digitHistory]);
-  const market = VOL_INDICES.find((m) => m.value === index) ?? VOL_INDICES[1];
-  const hour = new Date().getHours();
-  const intradayPace = 0.76 + ((Math.sin((hour / 24) * Math.PI * 2 + 0.7) + 1) / 2) * 0.72;
-  const chartTickMs = Math.max(140, Math.round(market.tickMs / intradayPace));
-  const chartCandleMs = Math.max(1600, Math.min(3600, Math.round(chartTickMs * 4.5)));
-  const chartVolatility = market.volatility * (0.88 + intradayPace * 0.22);
-  const showDigitStats = type !== "Buy/Sell";
-  const showDigitPicker = type === "Over/Under" || type === "Matches/Differs";
+  const spec = MARKETS[marketId];
+  const contract = contractFor(contractType);
 
+  // Live ticking price
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (autoSignalConsumedRef.current) return;
-    const raw = window.sessionStorage.getItem("digittrader-scanner-bot");
-    if (!raw) return;
-    autoSignalConsumedRef.current = true;
-    window.sessionStorage.removeItem("digittrader-scanner-bot");
-    try {
-      const signal = JSON.parse(raw) as { category?: TradeType; market?: string; bias?: string };
-      if (signal.category && TYPES.includes(signal.category)) {
-        typeRef.current = signal.category;
-        setType(signal.category);
-      }
-      if (signal.market && VOL_INDICES.some((m) => m.value === signal.market)) {
-        indexRef.current = signal.market;
-        setIndex(signal.market);
-      }
-      setBotMode(true);
-      toast.success("Scanner bot loaded and auto trade started");
-      window.setTimeout(() => startBot("AUTO"), 450);
-    } catch {
-      toast.error("Could not load scanner bot signal");
+    const id = setInterval(() => setNow(Date.now()), Math.min(spec.intervalMs, 400));
+    return () => clearInterval(id);
+  }, [spec.intervalMs]);
+
+  const currentPrice = useMemo(() => priceAt(marketId, now), [marketId, now]);
+  const currentDigit = lastDigit(currentPrice, spec.decimals);
+  const seriesEnd = Math.floor(now / spec.intervalMs);
+
+  const series = useMemo(() => {
+    const arr: { t: number; p: number }[] = [];
+    for (let i = visiblePoints - 1; i >= 0; i--) {
+      const tickIndex = seriesEnd - i;
+      const t = tickIndex * spec.intervalMs;
+      arr.push({ t, p: priceAt(marketId, t) });
     }
+    return arr;
+  }, [marketId, seriesEnd, spec.intervalMs, visiblePoints]);
+
+  // Candles derived from the series by grouping ticks. ~40 candles visible.
+  const candles = useMemo(() => {
+    const groupSize = Math.max(1, Math.floor(visiblePoints / 40));
+    const out: {
+      t: number;
+      o: number;
+      h: number;
+      l: number;
+      c: number;
+      range: [number, number];
+    }[] = [];
+    for (let i = 0; i < series.length; i += groupSize) {
+      const slice = series.slice(i, i + groupSize);
+      if (!slice.length) continue;
+      const o = slice[0].p;
+      const cl = slice[slice.length - 1].p;
+      const h = Math.max(...slice.map((s) => s.p));
+      const l = Math.min(...slice.map((s) => s.p));
+      out.push({ t: slice[0].t, o, h, l, c: cl, range: [l, h] });
+    }
+    return out;
+  }, [series, visiblePoints]);
+
+  // Digit distribution over the last DIGIT_WINDOW ticks
+  const digitStats = useMemo(() => {
+    const counts = new Array(10).fill(0);
+    for (let i = 0; i < DIGIT_WINDOW; i++) {
+      const t = (seriesEnd - i) * spec.intervalMs;
+      counts[lastDigit(priceAt(marketId, t), spec.decimals)]++;
+    }
+    return counts.map((c) => (c / DIGIT_WINDOW) * 100);
+  }, [marketId, seriesEnd, spec.intervalMs]);
+
+  const minDigit = digitStats.indexOf(Math.min(...digitStats));
+  const maxDigit = digitStats.indexOf(Math.max(...digitStats));
+
+  useEffect(() => {
+    if (!contract.directions.some((d) => d.key === direction)) {
+      setDirection(contract.directions[0].key);
+    }
+  }, [contract, direction]);
+
+  const placeFn = useServerFn(placeTrade);
+  const settleFn = useServerFn(settleTrade);
+  const settleDueFn = useServerFn(settleDueTrades);
+  const cancelFn = useServerFn(cancelTrade);
+  const walletFn = useServerFn(getWallet);
+  const tradesFn = useServerFn(listMyTrades);
+  const txnsFn = useServerFn(listMyTransactions);
+
+  const [accountMode] = useAccountMode();
+
+  const { data: wallet } = useQuery({
+    queryKey: ["wallet"],
+    queryFn: () => walletFn(),
+    refetchInterval: 3000,
+  });
+  const { data: trades } = useQuery({
+    queryKey: ["my-trades"],
+    queryFn: () => tradesFn(),
+    refetchInterval: 2500,
+  });
+  const { data: txns } = useQuery({
+    queryKey: ["my-txns"],
+    queryFn: () => txnsFn(),
+    refetchInterval: 4000,
+  });
+
+  useEffect(() => {
+    const loaded = readLoadedAutoBot();
+    if (!loaded) return;
+
+    setAutoBot(loaded);
+    setAutoTrading(true);
+    setMode("auto");
+    setMarketId(loaded.market);
+    setContractType(loaded.contractType);
+    setDirection(loaded.direction);
+    setStake(loaded.stake);
+    setTicks(loaded.ticks);
+    if (loaded.digit != null) setDigit(loaded.digit);
+    toast.success(`${loaded.source === "scanner" ? "AI scanner" : "Bot"} loaded for auto trading`);
   }, []);
 
-  // Track last digit + paint trail, then color active digit contracts by win/loss.
+  // Auto-settle any due open trades (covers bot-placed trades too)
   useEffect(() => {
-    const d = Math.floor(price * 10000) % 10;
-    setDigitHistory((prev) => [...prev.slice(-99), d]);
-    setTickTrail((prev) => {
-      const dir = activeDirectionRef.current;
-      const ty = typeRef.current;
-      const sel = selectedDigitRef.current;
-      let tone: "neutral" | "bull" | "bear" = "neutral";
-      if (dir && ty !== "Buy/Sell") {
-        let winning = false;
-        if (ty === "Even/Odd") winning = dir === "EVEN" ? d % 2 === 0 : d % 2 === 1;
-        else if (ty === "Over/Under") winning = dir === "OVER" ? d > sel : d < sel;
-        else winning = dir === "MATCH" ? d === sel : d !== sel;
-        tone = winning ? "bull" : "bear";
+    const iv = setInterval(async () => {
+      try {
+        const r = await settleDueFn();
+        if (r?.settled) {
+          qc.invalidateQueries({ queryKey: ["wallet"] });
+          qc.invalidateQueries({ queryKey: ["my-trades"] });
+          qc.invalidateQueries({ queryKey: ["my-txns"] });
+          qc.invalidateQueries({ queryKey: ["bots"] });
+        }
+      } catch {
+        /* ignore */
       }
-      return [...prev.slice(-19), { d, tone }];
-    });
-  }, [price]);
+    }, 2000);
+    return () => clearInterval(iv);
+  }, [settleDueFn, qc]);
 
-  const digitStats = Array.from({ length: 10 }, (_, d) => {
-    const c = digitHistory.filter((x) => x === d).length;
-    return { d, pct: digitHistory.length ? (c / digitHistory.length) * 100 : 10 };
-  });
-  const maxPct = Math.max(...digitStats.map((s) => s.pct));
-  const minPct = Math.min(...digitStats.map((s) => s.pct));
-  const currentDigit = digitHistory[digitHistory.length - 1] ?? 0;
-  const chartNote = pendingTrade
-    ? pendingTrade.status === "open"
-      ? `Open ${pendingTrade.direction} ${pendingTrade.type} $${pendingTrade.stake}`
-      : settleNote
-    : settleNote;
-  const chartNoteTone = pendingTrade
-    ? pendingTrade.status === "open"
-      ? "neutral"
-      : pendingTrade.result === "win"
-      ? "bull"
-      : "bear"
-    : "neutral";
+  const openTrades = useMemo(
+    () => (trades ?? []).filter((t: any) => t.status === "open"),
+    [trades],
+  );
+  const closedTrades = useMemo(
+    () => (trades ?? []).filter((t: any) => t.status !== "open"),
+    [trades],
+  );
+
+  // Session P/L across closed trades of the current session (last hour)
+  const sessionPL = useMemo(() => {
+    const cutoff = Date.now() - 60 * 60 * 1000;
+    let pl = 0;
+    for (const t of closedTrades as any[]) {
+      const at = new Date(t.settled_at ?? t.opened_at).getTime();
+      if (at < cutoff) continue;
+      pl += (t.payout_cents ?? 0) - t.stake_cents;
+    }
+    return pl;
+  }, [closedTrades]);
+
+  const sessionCount = useMemo(() => {
+    const cutoff = Date.now() - 60 * 60 * 1000;
+    let w = 0,
+      l = 0;
+    for (const t of closedTrades as any[]) {
+      const at = new Date(t.settled_at ?? t.opened_at).getTime();
+      if (at < cutoff) continue;
+      if (t.status === "won") w++;
+      else if (t.status === "lost") l++;
+    }
+    return { w, l, total: w + l };
+  }, [closedTrades]);
+
+  const mult = payoutMultiplier(contractType, direction, contract.needsDigit ? digit : null);
+  const stakeCents = Math.max(0, Math.round(parseFloat(stake || "0") * 100));
+  const potentialPayoutCents = Math.floor(stakeCents * mult);
+
   useEffect(() => {
-    if (pendingTrade?.status !== "settled") return;
-    const timeout = window.setTimeout(() => {
-      setPendingTrade(null);
-      setSettleNote(null);
-    }, 4000);
-    return () => clearTimeout(timeout);
-  }, [pendingTrade?.status]);
+    if (!pendingTrade) return;
+    const wait = Math.max(0, pendingTrade.settlesAt - Date.now()) + 400;
+    const t = setTimeout(async () => {
+      try {
+        const exitTime = pendingTrade.exitTickIndex * spec.intervalMs;
+        const exitPrice = priceAt(marketId, exitTime);
+        const won = contractWon(
+          pendingTrade.contractType,
+          pendingTrade.direction,
+          pendingTrade.entryPrice,
+          exitPrice,
+          pendingTrade.digitTarget,
+          spec.decimals,
+        );
+        const res = await settleFn({
+          data: {
+            trade_id: pendingTrade.id,
+            won,
+            exit_price: exitPrice,
+            multiplier: payoutMultiplier(
+              pendingTrade.contractType,
+              pendingTrade.direction,
+              pendingTrade.digitTarget,
+            ),
+          },
+        });
+        const serverWon = String(res.status ?? "") === "won" || res.won === true;
+        const finalExitPrice = Number(
+          (res as { exit_price?: number | null }).exit_price ?? exitPrice,
+        );
+        const finalExitDigit = lastDigit(finalExitPrice, spec.decimals);
+        setLastOutcome({ digit: finalExitDigit, won: serverWon, at: Date.now() });
+        const payoutCents = Math.round(Number(res.payout ?? 0) * 100);
+        if (serverWon) toast.success(`Trade paid ${formatUSD(payoutCents)}`);
+        else toast.error("Trade lost");
+      } catch (e) {
+        toast.error((e as Error).message);
+      } finally {
+        setPendingTrade(null);
+        qc.invalidateQueries({ queryKey: ["wallet"] });
+        qc.invalidateQueries({ queryKey: ["my-trades"] });
+        qc.invalidateQueries({ queryKey: ["my-txns"] });
+      }
+    }, wait);
+    return () => clearTimeout(t);
+  }, [pendingTrade, settleFn, qc, spec.decimals, marketId, spec.intervalMs]);
 
-  async function placeAndSettle(direction: string, useStake: number): Promise<boolean> {
-    const ty = typeRef.current;
-    const sel = selectedDigitRef.current;
-    activeDirectionRef.current = direction;
-    let trade;
-    logDebugEvent("info", "binary.trade", "Placing binary trade", {
-      market: indexRef.current,
-      type: ty,
-      direction,
-      stake: useStake,
-      selectedDigit: ty === "Over/Under" || ty === "Matches/Differs" ? sel : undefined,
-      price: priceRef.current,
-    });
+  useEffect(() => {
+    if (!pendingTrade) {
+      setTickOutcomes([]);
+      return;
+    }
+
+    const landedTicks = Math.max(
+      0,
+      Math.min(seriesEnd, pendingTrade.exitTickIndex) - pendingTrade.entryTickIndex,
+    );
+    const outcomes: TickOutcome[] = [];
+    for (let offset = 0; offset <= landedTicks; offset++) {
+      const tickIndex = pendingTrade.entryTickIndex + offset;
+      const price = priceAt(marketId, tickIndex * spec.intervalMs);
+      const isFinal = tickIndex >= pendingTrade.exitTickIndex;
+      outcomes.push({
+        tickIndex,
+        digit: lastDigit(price, spec.decimals),
+        won: isFinal
+          ? contractWon(
+              pendingTrade.contractType,
+              pendingTrade.direction,
+              pendingTrade.entryPrice,
+              price,
+              pendingTrade.digitTarget,
+              spec.decimals,
+            )
+          : false,
+        final: isFinal,
+      });
+    }
+    setTickOutcomes(outcomes);
+  }, [pendingTrade, seriesEnd, marketId, spec.intervalMs, spec.decimals]);
+
+  // Fade the last-outcome glow after 4s
+  useEffect(() => {
+    if (!lastOutcome) return;
+    const t = setTimeout(() => setLastOutcome(null), 4000);
+    return () => clearTimeout(t);
+  }, [lastOutcome]);
+
+  // (Per-tick digit glow removed — only the final settlement flashes green/red;
+  // the orange glow persists on the target digit while the contract is open.)
+
+  async function handlePlace(
+    dir: Direction,
+    options: { automated?: boolean; tickCount?: number; source?: string } = {},
+  ) {
+    if (placing || pendingTrade) return;
+    if (openTrades.length > 0) {
+      if (!options.automated) {
+        toast.error("You already have one open binary contract. Wait for it to settle first.");
+      }
+      return;
+    }
+    if (stakeCents < 35) {
+      toast.error("Minimum stake is $0.35");
+      return;
+    }
     setPlacing(true);
-    setSettleNote(null);
+    setDirection(dir);
     try {
-      trade = await place({
+      const tradeTicks = Math.max(1, Number(options.tickCount ?? ticks));
+      const entryTickIndex = seriesEnd;
+      const exitTickIndex = seriesEnd + tradeTicks;
+      const tradeMultiplier = payoutMultiplier(
+        contractType,
+        dir,
+        contract.needsDigit ? digit : null,
+      );
+      const res = await placeFn({
         data: {
           module: "binary",
-          market: indexRef.current,
-          direction,
-          stake: useStake,
-          entry_price: priceRef.current,
+          market: marketId,
+          direction: dir,
+          stake: stakeCents / 100,
+          entry_price: currentPrice,
           meta: {
-            type: ty,
-            digit: ty === "Over/Under" || ty === "Matches/Differs" ? sel : undefined,
+            account_mode: accountMode,
+            contract_type: contractType,
+            digit_target: contract.needsDigit ? digit : null,
+            multiplier: tradeMultiplier,
+            settlement_ticks: tradeTicks,
+            tick_ms: spec.intervalMs,
+            entry_tick_index: entryTickIndex,
+            exit_tick_index: exitTickIndex,
+            automated: !!options.automated,
+            automation_source: options.source ?? null,
           },
         },
       });
-      const id = trade.id ?? `pending-${Date.now()}`;
+      const id = normalizePlacedTradeId(res);
+      if (!id) throw new Error("Trade was placed but no trade id was returned");
+      setTickOutcomes([]);
       setPendingTrade({
-        tradeId: id,
-        direction,
-        stake: useStake,
-        type: ty,
-        market: indexRef.current,
-        entryPrice: priceRef.current,
-        status: "open",
+        id,
+        settlesAt: exitTickIndex * spec.intervalMs,
+        entryTickIndex,
+        exitTickIndex,
+        entryPrice: currentPrice,
+        digitTarget: contract.needsDigit ? digit : null,
+        contractType,
+        direction: dir,
+        stakeCents,
       });
-      toast.success("Contract placed and open — waiting for result");
-      logDebugEvent("info", "binary.trade", "Binary trade placed", {
-        tradeId: trade.id,
-        direction,
-        stake: useStake,
-      });
-      qc.invalidateQueries({ queryKey: ["profile"] });
+      qc.invalidateQueries({ queryKey: ["wallet"] });
+      qc.invalidateQueries({ queryKey: ["my-trades"] });
     } catch (e) {
-      logDebugEvent("error", "binary.trade", "Binary trade placement failed", serializeError(e));
-      toast.error(e instanceof Error ? e.message : "Failed");
-      activeDirectionRef.current = null;
-      setPendingTrade(null);
-      throw e;
-    }
-    // wait 5s for tick result
-    await new Promise((r) => setTimeout(r, 5000));
-    const finalDigit = Math.floor(priceRef.current * 10000) % 10;
-    let won = false;
-    if (ty === "Buy/Sell") won = direction === "BUY" ? Math.random() > 0.48 : Math.random() > 0.52;
-    else if (ty === "Even/Odd")
-      won = direction === "EVEN" ? finalDigit % 2 === 0 : finalDigit % 2 === 1;
-    else if (ty === "Over/Under") won = direction === "OVER" ? finalDigit > sel : finalDigit < sel;
-    else if (ty === "Matches/Differs")
-      won = direction === "MATCH" ? finalDigit === sel : finalDigit !== sel;
-
-    const winProfitRate = profitRateForContract(ty, direction);
-    try {
-      await settle({
-        data: {
-          trade_id: trade.id,
-          won,
-          exit_price: priceRef.current,
-          multiplier: 1 + winProfitRate,
-        },
-      });
-      const pnl = won ? useStake * winProfitRate : -useStake;
-      setPendingTrade((prev) =>
-        prev
-          ? {
-              ...prev,
-              status: "settled",
-              result: won ? "win" : "loss",
-              pnl,
-            }
-          : null,
-      );
-      setSettleNote(won ? `WIN +$${(useStake * winProfitRate).toFixed(2)}` : `LOSS -$${useStake}`);
-      logDebugEvent("info", "binary.trade", "Binary trade settled", {
-        tradeId: trade.id,
-        won,
-        finalDigit,
-        exitPrice: priceRef.current,
-      });
-    } catch (e) {
-      logDebugEvent("error", "binary.trade", "Binary trade settlement failed", serializeError(e));
-      throw e;
+      toast.error((e as Error).message);
     } finally {
       setPlacing(false);
     }
-    activeDirectionRef.current = null;
-    qc.invalidateQueries({ queryKey: ["profile"] });
-    qc.invalidateQueries({ queryKey: ["trades"] });
+  }
 
-    if (won) {
-      const profit = useStake * winProfitRate;
-      sessionPnLRef.current += profit;
-      toast.success(`WIN +$${profit.toFixed(2)} · session $${sessionPnLRef.current.toFixed(2)}`);
-    } else {
-      sessionPnLRef.current -= useStake;
-      toast.error(`LOSS -$${useStake} · session $${sessionPnLRef.current.toFixed(2)}`);
+  useEffect(() => {
+    if (!autoTrading || !autoBot || pendingTrade || placing || openTrades.length > 0) return;
+
+    const id = window.setTimeout(() => {
+      void handlePlace(autoBot.direction, {
+        automated: true,
+        tickCount: autoBot.ticks,
+        source: autoBot.source,
+      });
+    }, 650);
+
+    return () => window.clearTimeout(id);
+  }, [
+    autoTrading,
+    autoBot,
+    pendingTrade,
+    placing,
+    openTrades.length,
+    marketId,
+    contractType,
+    direction,
+    stake,
+    digit,
+    ticks,
+    currentPrice,
+    seriesEnd,
+  ]);
+
+  async function stopAutoTrading() {
+    setAutoTrading(false);
+    setAutoBot(null);
+    setMode("manual");
+    window.sessionStorage.removeItem("digittrader-scanner-bot");
+    window.sessionStorage.removeItem("megaflip-scanner-bot");
+
+    const cancelIds = new Set<string>(openTrades.map((trade: any) => trade.id).filter(Boolean));
+    if (pendingTrade?.id) cancelIds.add(pendingTrade.id);
+    setPendingTrade(null);
+    if (cancelIds.size === 0) {
+      toast.success("Auto trading stopped");
+      return;
     }
-    return won;
+
+    const results = await Promise.allSettled(
+      [...cancelIds].map((tradeId) => cancelFn({ data: { trade_id: tradeId } })),
+    );
+    const cancelled = results.filter((result) => result.status === "fulfilled").length;
+    qc.invalidateQueries({ queryKey: ["wallet"] });
+    qc.invalidateQueries({ queryKey: ["my-trades"] });
+    qc.invalidateQueries({ queryKey: ["my-txns"] });
+    toast.success(
+      `Auto trading stopped${cancelled ? ` and ${cancelled} open trade${cancelled === 1 ? "" : "s"} cancelled` : ""}`,
+    );
   }
 
-  async function fireManual(direction: string) {
-    if (botRunningRef.current) return;
-    try {
-      await placeAndSettle(direction, stake);
-    } catch {
-      // The trade function already shows the failure toast.
+  function zoomIn() {
+    setVisiblePoints((points) => Math.max(60, Math.round(points * 0.72)));
+  }
+
+  function zoomOut() {
+    setVisiblePoints((points) => Math.min(420, Math.round(points * 1.35)));
+  }
+
+  function resetZoom() {
+    setVisiblePoints(CHART_POINTS);
+    setDrawGuide(false);
+  }
+
+  function saveChart() {
+    const svg = chartShellRef.current?.querySelector("svg");
+    if (!svg) {
+      toast.error("Chart is not ready yet");
+      return;
     }
+    const copy = svg.cloneNode(true) as SVGElement;
+    copy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    const blob = new Blob([new XMLSerializer().serializeToString(copy)], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${marketId.toLowerCase()}-chart.svg`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success("Chart saved");
   }
 
-  function autoDirection() {
-    const ty = typeRef.current;
-    const activeMarket = VOL_INDICES.find((m) => m.value === indexRef.current) ?? VOL_INDICES[1];
-    const lastDigits = digitHistoryRef.current.slice(-24);
-    const even = lastDigits.filter((d) => d % 2 === 0).length;
-    const avg = lastDigits.length ? lastDigits.reduce((sum, d) => sum + d, 0) / lastDigits.length : 4.5;
-    const current = priceRef.current;
-    if (ty === "Buy/Sell") return current >= activeMarket.basePrice ? "SELL" : "BUY";
-    if (ty === "Even/Odd") return even > lastDigits.length / 2 ? "ODD" : "EVEN";
-    if (ty === "Over/Under") return avg >= selectedDigitRef.current ? "UNDER" : "OVER";
-    return avg >= selectedDigitRef.current ? "DIFFER" : "MATCH";
-  }
+  const priceValues = series.map((s) => s.p);
+  const min = Math.min(...priceValues),
+    max = Math.max(...priceValues);
+  const priceDelta = series.length > 1 ? currentPrice - series[0].p : 0;
+  const pctChange = series[0].p ? (priceDelta / series[0].p) * 100 : 0;
+  const isUp = priceDelta >= 0;
 
-  async function startBot(direction: string) {
-    if (botRunningRef.current) return;
-    logDebugEvent("info", "binary.bot", "Binary bot started", {
-      direction,
-      stake,
-      target,
-      stop,
-      martingale,
-      type,
-      market: indexRef.current,
-    });
-    botRunningRef.current = true;
-    setBotRunning(true);
-    sessionPnLRef.current = 0;
-    currentStakeRef.current = stake;
-    toast.success(`Bot started — ${direction} · target $${target} · stop -$${stop}`);
-    while (botRunningRef.current) {
-      try {
-        const nextDirection = direction === "AUTO" ? autoDirection() : direction;
-        const won = await placeAndSettle(nextDirection, currentStakeRef.current);
-        if (won) {
-          currentStakeRef.current = stake; // reset on win
-        } else {
-          currentStakeRef.current = +(currentStakeRef.current * martingale).toFixed(2);
-        }
-        if (sessionPnLRef.current >= target) {
-          toast.success(`Target hit +$${sessionPnLRef.current.toFixed(2)}`);
-          break;
-        }
-        if (sessionPnLRef.current <= -stop) {
-          toast.error(`Stop hit -$${(-sessionPnLRef.current).toFixed(2)}`);
-          break;
-        }
-        await new Promise((r) => setTimeout(r, 800));
-      } catch (e) {
-        logDebugEvent(
-          "error",
-          "binary.bot",
-          "Binary bot stopped after trade error",
-          serializeError(e),
-        );
-        break;
-      }
-    }
-    botRunningRef.current = false;
-    setBotRunning(false);
-  }
-
-  function stopBot() {
-    logDebugEvent("info", "binary.bot", "Binary bot stop requested", {
-      sessionPnL: sessionPnLRef.current,
-    });
-    botRunningRef.current = false;
-    setBotRunning(false);
-    toast("Bot stopped");
-  }
-
-  const actions = {
-    "Buy/Sell": [
-      ["BUY", "bull"],
-      ["SELL", "bear"],
-    ],
-    "Even/Odd": [
-      ["EVEN", "bull"],
-      ["ODD", "bear"],
-    ],
-    "Matches/Differs": [
-      ["MATCH", "bull"],
-      ["DIFFER", "bear"],
-    ],
-    "Over/Under": [
-      ["OVER", "bull"],
-      ["UNDER", "bear"],
-    ],
-  }[type] as [string, "bull" | "bear"][];
-
-  // For chart badge tone
-  const activeDir = activeDirectionRef.current;
-  let badgeTone: "neutral" | "bull" | "bear" = "neutral";
-  if (activeDir && type !== "Buy/Sell") {
-    let winning = false;
-    if (type === "Even/Odd")
-      winning = activeDir === "EVEN" ? currentDigit % 2 === 0 : currentDigit % 2 === 1;
-    else if (type === "Over/Under")
-      winning = activeDir === "OVER" ? currentDigit > selectedDigit : currentDigit < selectedDigit;
-    else
-      winning =
-        activeDir === "MATCH" ? currentDigit === selectedDigit : currentDigit !== selectedDigit;
-    badgeTone = winning ? "bull" : "bear";
-  }
+  const secondsLeft = pendingTrade
+    ? Math.max(0, Math.ceil((pendingTrade.settlesAt - now) / 1000))
+    : 0;
+  // Zoom scale: max zoom in (~60 visible pts) reads 50%, and upscales as more
+  // ticks come into view.
+  const zoomPercent = Math.round((visiblePoints / 60) * 50);
 
   return (
-    <div className="space-y-3">
-      {/* Trade type tabs — fit 4 in row, no horizontal scroll */}
-      <div className="grid grid-cols-4 gap-1">
-        {TYPES.map((t) => (
-          <button
-            key={t}
-            onClick={() => setType(t)}
-            className={
-              "py-1.5 px-1 rounded-lg text-[10px] font-bold border transition " +
-              (type === t
-                ? "bg-primary/20 border-primary text-primary glow-primary"
-                : "bg-surface border-border text-muted-foreground")
-            }
-          >
-            {t === "Matches/Differs" ? "Match/Diff" : t}
-          </button>
-        ))}
-      </div>
-
-      {/* Index header */}
-      <div className="relative">
-        <button
-          onClick={() => setMarketOpen(!marketOpen)}
-          className="w-full bg-card border border-border rounded-xl p-3 flex items-center justify-between gap-3"
-        >
-          <div className="flex items-center gap-2 text-left min-w-0">
-            <div className="h-8 w-8 rounded-full bg-primary/20 text-primary grid place-items-center font-extrabold text-xs shrink-0">
-              V
-            </div>
-            <div className="min-w-0">
-              <div className="font-bold text-sm truncate">{market.label}</div>
-              <div className="text-[10px] text-muted-foreground">
-                {chartTickMs <= 280
-                  ? "rapid 1s ticks"
-                  : chartTickMs >= 800
-                    ? "slow session"
-                    : "live synthetic ticks"}
-              </div>
-            </div>
-          </div>
-          <div className="text-right shrink-0">
-            <div className="font-mono font-bold tabular-nums">{price.toFixed(5)}</div>
-            <div className="text-xs text-muted-foreground">
-              last digit <span className="text-primary font-bold tabular-nums">{currentDigit}</span>{" "}
-              <span className="live-dot ml-1" />
-            </div>
-          </div>
-          <ChevronDown
-            className={
-              "h-4 w-4 text-muted-foreground shrink-0 transition " +
-              (marketOpen ? "rotate-180" : "")
-            }
+    <div className="flex h-[calc(100dvh-56px)] flex-col overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-2 lg:grid lg:grid-cols-[280px_minmax(0,1fr)_320px] lg:gap-3 lg:p-3">
+        {/* LEFT — positions (desktop only; mobile has /positions route) */}
+        <div className="hidden min-h-0 lg:block">
+          <PositionsPanel
+            tab={positionsTab}
+            onTab={setPositionsTab}
+            openTrades={openTrades}
+            closedTrades={closedTrades}
+            txns={txns ?? []}
+            sessionPL={sessionPL}
+            sessionCount={sessionCount}
+            spec={spec}
           />
-        </button>
+        </div>
 
-        {marketOpen && (
-          <div className="absolute z-20 mt-1 w-full bg-card border border-border rounded-xl divide-y divide-border max-h-72 overflow-auto shadow-xl">
-            {VOL_INDICES.map((m) => (
-              <button
-                key={m.value}
-                onClick={() => {
-                  setIndex(m.value);
-                  setMarketOpen(false);
-                }}
-                className="w-full text-left p-2.5 hover:bg-accent flex items-center justify-between gap-2 text-sm"
+        {/* Chart column — mobile: 40vh; desktop: 1fr */}
+        <div className="flex h-[40vh] shrink-0 flex-col gap-2 lg:h-auto lg:min-h-0 lg:flex-1 lg:shrink">
+          <div
+            ref={chartShellRef}
+            className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-surface"
+          >
+            {/* Chart toolbar (left) */}
+            <div className="absolute left-3 top-3 z-10 flex flex-col gap-1 rounded-xl border border-border bg-background/80 p-1 backdrop-blur">
+              <ChartTool
+                label="Candles"
+                active={chartType === "candles"}
+                onClick={() => setChartType("candles")}
               >
-                <span className="font-semibold truncate">{m.label}</span>
-                <span className="text-[10px] text-muted-foreground shrink-0">
-                  {m.tickMs <= 260 ? "1s" : "standard"}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          onClick={() => setChartMode("line")}
-          className={
-            "py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 " +
-            (chartMode === "line"
-              ? "bg-primary/20 text-primary border-primary/50"
-              : "bg-card border-border text-muted-foreground")
-          }
-        >
-          <LineChart className="h-3.5 w-3.5" /> Line
-        </button>
-        <button
-          onClick={() => setChartMode("candles")}
-          className={
-            "py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 " +
-            (chartMode === "candles"
-              ? "bg-primary/20 text-primary border-primary/50"
-              : "bg-card border-border text-muted-foreground")
-          }
-        >
-          <CandlestickChart className="h-3.5 w-3.5" /> Candles
-        </button>
-      </div>
-
-      <div className="bg-card border border-border rounded-xl p-2 h-56 relative">
-        <LiveChart
-          basePrice={market.basePrice}
-          volatility={chartVolatility}
-          tickMs={chartTickMs}
-          candleMs={chartCandleMs}
-          onPrice={setPrice}
-          badge={`${currentDigit}`}
-          badgeTone={badgeTone}
-          note={chartNote ?? undefined}
-          noteTone={chartNote ? chartNoteTone : "neutral"}
-          mode={chartMode}
-          className="h-full"
-        />
-      </div>
-
-      {(placing || pendingTrade?.status === "open" || settleNote) && (
-        <div className="bg-card border border-border rounded-xl p-3 text-sm space-y-1 text-foreground">
-          {placing && <div className="text-muted-foreground">Placing trade… please wait.</div>}
-          {pendingTrade?.status === "open" && (
-            <div className="rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-primary font-semibold">
-              Contract placed: {pendingTrade.direction} {pendingTrade.type} ${pendingTrade.stake} — waiting for result.
+                <CandlestickChart className="h-4 w-4" />
+              </ChartTool>
+              <ChartTool
+                label="Line"
+                active={chartType === "line"}
+                onClick={() => setChartType("line")}
+              >
+                <LineIcon className="h-4 w-4" />
+              </ChartTool>
+              <ChartTool
+                label="Trend line"
+                active={showReference}
+                onClick={() => setShowReference((v) => !v)}
+              >
+                <TrendingUp className="h-4 w-4" />
+              </ChartTool>
+              <ChartTool label="Tick dots" active={showDots} onClick={() => setShowDots((v) => !v)}>
+                <BarChart3 className="h-4 w-4" />
+              </ChartTool>
+              <ChartTool label="Guide" active={drawGuide} onClick={() => setDrawGuide((v) => !v)}>
+                <Palette className="h-4 w-4" />
+              </ChartTool>
+              <ChartTool label="Save chart" onClick={saveChart}>
+                <Download className="h-4 w-4" />
+              </ChartTool>
             </div>
-          )}
-          {pendingTrade?.status === "settled" && settleNote && (
-            <div className={
-              "rounded-xl px-3 py-2 font-semibold " +
-              (pendingTrade.result === "win"
-                ? "bg-bull/10 text-bull border border-bull/30"
-                : "bg-bear/10 text-bear border border-bear/30")
-            }>
-              {settleNote} · settled on digit {currentDigit}
-            </div>
-          )}
-        </div>
-      )}
 
-      {/* Tick trail — shows each tick's last digit colored by win/loss */}
-      <div className="bg-card border border-border rounded-xl px-2 py-2 flex items-center gap-1.5 overflow-x-auto">
-        <span className="text-[10px] uppercase text-muted-foreground font-bold tracking-wider shrink-0 mr-1">
-          Ticks
-        </span>
-        {tickTrail.length === 0 && <span className="text-xs text-muted-foreground">waiting…</span>}
-        {tickTrail.map((t, i) => (
-          <span
-            key={i}
-            className={
-              "shrink-0 h-7 w-7 grid place-items-center rounded-full text-xs font-extrabold tabular-nums border " +
-              (t.tone === "bull"
-                ? "bg-bull text-bull-foreground border-bull glow-bull"
-                : t.tone === "bear"
-                  ? "bg-bear text-bear-foreground border-bear glow-bear"
-                  : "bg-surface border-border text-muted-foreground")
-            }
-          >
-            {t.d}
-          </span>
-        ))}
-      </div>
-
-      {/* Digit stats — circles like Deriv */}
-      {showDigitStats && (
-        <div className="bg-card border border-border rounded-xl p-3 space-y-3">
-          <div className="text-[10px] uppercase text-muted-foreground font-bold tracking-wider">
-            Last 100 digits
-          </div>
-          <div className="grid grid-cols-10 gap-1">
-            {digitStats.map(({ d, pct }) => {
-              const isMax = pct === maxPct;
-              const isMin = pct === minPct;
-              const isCurrent = d === currentDigit;
-              return (
-                <div key={d} className="flex flex-col items-center gap-1">
-                  <div
-                    className={
-                      "h-9 w-9 rounded-full grid place-items-center text-sm font-extrabold border-2 transition-all " +
-                      (isCurrent ? "ring-2 ring-primary digit-pop " : "") +
-                      (isMax
-                        ? "bg-bull/20 border-bull text-bull"
-                        : isMin
-                          ? "bg-bear/15 border-bear/60 text-bear"
-                          : "bg-surface border-border text-foreground")
-                    }
-                  >
-                    {d}
+            {/* Market picker */}
+            <div className="absolute left-16 top-3 z-10">
+              <button
+                onClick={() => setMarketMenuOpen((v) => !v)}
+                className="flex items-center gap-3 rounded-xl border border-border bg-background/85 px-3 py-2 text-left backdrop-blur transition hover:border-primary/60"
+              >
+                <div className="grid h-8 w-8 place-items-center rounded-lg bg-primary/15 text-primary">
+                  <BarChart3 className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold">{spec.label} Index</div>
+                  <div className="flex items-baseline gap-1.5 font-mono text-xs">
+                    <span>{formatPrice(currentPrice, spec.decimals)}</span>
+                    <span className={isUp ? "text-bull" : "text-bear"}>
+                      {isUp ? "+" : ""}
+                      {formatPrice(priceDelta, spec.decimals)} ({pctChange.toFixed(2)}%)
+                    </span>
                   </div>
-                  <span className="text-[9px] font-mono tabular-nums text-muted-foreground">
-                    {pct.toFixed(1)}%
-                  </span>
                 </div>
-              );
-            })}
-          </div>
-          {type === "Even/Odd" && (
-            <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-lg bg-bull/10 border border-bull/30 p-2 text-center">
-                <div className="text-[10px] uppercase text-bull font-bold">Even</div>
-                <div className="text-lg font-extrabold tabular-nums">
-                  {digitStats
-                    .filter((s) => s.d % 2 === 0)
-                    .reduce((sum, s) => sum + s.pct, 0)
-                    .toFixed(1)}
-                  %
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              </button>
+              {marketMenuOpen && (
+                <div className="absolute left-0 top-full z-30 mt-1 max-h-72 w-64 overflow-auto rounded-xl border border-border bg-popover p-1 shadow-lg">
+                  {MARKET_LIST.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => {
+                        setMarketId(m.id);
+                        setMarketMenuOpen(false);
+                      }}
+                      className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-surface ${
+                        m.id === marketId ? "bg-surface text-primary" : ""
+                      }`}
+                    >
+                      <BarChart3 className="h-3.5 w-3.5 opacity-70" />
+                      <span className="flex-1">{m.label}</span>
+                      <span className="text-[10px] text-muted-foreground">{m.intervalMs}ms</span>
+                    </button>
+                  ))}
                 </div>
+              )}
+            </div>
+
+            {/* Scale badge */}
+            <div className="absolute right-3 top-3 z-10 rounded-lg border border-border bg-background/80 px-2 py-1 text-xs font-mono text-muted-foreground backdrop-blur">
+              {zoomPercent}%
+            </div>
+
+            {/* Chart */}
+            <div className="min-h-0 flex-1">
+              <ResponsiveContainer width="100%" height="100%">
+                {chartType === "line" ? (
+                  <RCLineChart data={series} margin={{ top: 56, right: 48, bottom: 4, left: 0 }}>
+                    <defs>
+                      <filter id="lineGlow" x="-20%" y="-20%" width="140%" height="140%">
+                        <feGaussianBlur stdDeviation="1.4" result="blur" />
+                        <feMerge>
+                          <feMergeNode in="blur" />
+                          <feMergeNode in="SourceGraphic" />
+                        </feMerge>
+                      </filter>
+                    </defs>
+                    <CartesianGrid
+                      stroke="oklch(0.28 0.02 260)"
+                      strokeOpacity={0.25}
+                      vertical
+                      horizontal
+                    />
+                    <YAxis
+                      domain={[min - (max - min) * 0.08, max + (max - min) * 0.08]}
+                      orientation="right"
+                      tickLine={false}
+                      axisLine={false}
+                      width={44}
+                      tick={{
+                        fill: "oklch(0.72 0.02 255)",
+                        fontSize: 10,
+                        fontFamily: "JetBrains Mono",
+                      }}
+                      tickFormatter={(v) => formatPrice(v, spec.decimals)}
+                    />
+                    {showReference && (
+                      <ReferenceLine
+                        y={currentPrice}
+                        stroke="oklch(0.95 0 0)"
+                        strokeDasharray="3 3"
+                        strokeOpacity={0.4}
+                        label={{
+                          value: formatPrice(currentPrice, spec.decimals),
+                          position: "right",
+                          fill: "oklch(0.95 0 0)",
+                          fontSize: 11,
+                        }}
+                      />
+                    )}
+                    {drawGuide && (
+                      <ReferenceLine
+                        y={(min + max) / 2}
+                        stroke="oklch(0.75 0.15 85)"
+                        strokeDasharray="6 5"
+                        strokeOpacity={0.55}
+                      />
+                    )}
+                    <Line
+                      type="stepAfter"
+                      dataKey="p"
+                      stroke="oklch(0.97 0 0)"
+                      strokeWidth={1.5}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      dot={showDots ? { r: 1.4, strokeWidth: 0, fill: "oklch(0.97 0 0)" } : false}
+                      isAnimationActive={false}
+                      filter="url(#lineGlow)"
+                    />
+                  </RCLineChart>
+                ) : (
+                  <ComposedChart data={candles} margin={{ top: 56, right: 48, bottom: 4, left: 0 }}>
+                    <CartesianGrid
+                      stroke="oklch(0.28 0.02 260)"
+                      strokeOpacity={0.25}
+                      vertical
+                      horizontal
+                    />
+                    <YAxis
+                      domain={[min - (max - min) * 0.08, max + (max - min) * 0.08]}
+                      orientation="right"
+                      tickLine={false}
+                      axisLine={false}
+                      width={44}
+                      tick={{
+                        fill: "oklch(0.72 0.02 255)",
+                        fontSize: 10,
+                        fontFamily: "JetBrains Mono",
+                      }}
+                      tickFormatter={(v) => formatPrice(v, spec.decimals)}
+                    />
+                    {showReference && (
+                      <ReferenceLine
+                        y={currentPrice}
+                        stroke="oklch(0.95 0 0)"
+                        strokeDasharray="3 3"
+                        strokeOpacity={0.4}
+                        label={{
+                          value: formatPrice(currentPrice, spec.decimals),
+                          position: "right",
+                          fill: "oklch(0.95 0 0)",
+                          fontSize: 11,
+                        }}
+                      />
+                    )}
+                    {drawGuide && (
+                      <ReferenceLine
+                        y={(min + max) / 2}
+                        stroke="oklch(0.75 0.15 85)"
+                        strokeDasharray="6 5"
+                        strokeOpacity={0.55}
+                      />
+                    )}
+                    <Bar
+                      dataKey="range"
+                      isAnimationActive={false}
+                      shape={(props: any) => <CandleShape {...props} />}
+                    />
+                  </ComposedChart>
+                )}
+              </ResponsiveContainer>
+            </div>
+
+            {/* Digit strip */}
+            <DigitStrip
+              currentDigit={currentDigit}
+              currentPrice={currentPrice}
+              decimals={spec.decimals}
+              digitStats={digitStats}
+              minDigit={minDigit}
+              maxDigit={maxDigit}
+              pending={pendingTrade}
+              lastOutcome={lastOutcome}
+              tickOutcomes={tickOutcomes}
+            />
+
+            {/* Zoom controls (always visible) */}
+            <div className="absolute bottom-32 left-3 z-10 flex flex-col gap-1 rounded-xl border border-border bg-background/80 p-1 backdrop-blur">
+              <button
+                onClick={zoomIn}
+                className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:text-foreground"
+                aria-label="Zoom in"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={resetZoom}
+                className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:text-foreground"
+                aria-label="Reset chart zoom"
+              >
+                <Crosshair className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={zoomOut}
+                className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:text-foreground"
+                aria-label="Zoom out"
+              >
+                <Minus className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {pendingTrade && (
+              <div className="absolute right-3 top-14 z-10 flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs">
+                <span className="live-dot" />
+                <span>Contract open · {secondsLeft}s</span>
               </div>
-              <div className="rounded-lg bg-bear/10 border border-bear/30 p-2 text-center">
-                <div className="text-[10px] uppercase text-bear font-bold">Odd</div>
-                <div className="text-lg font-extrabold tabular-nums">
-                  {digitStats
-                    .filter((s) => s.d % 2 === 1)
-                    .reduce((sum, s) => sum + s.pct, 0)
-                    .toFixed(1)}
-                  %
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT — trade config (scrolls internally on tight viewports) */}
+        <div className="min-h-0 flex-1 overflow-y-auto lg:flex-none">
+          {autoBot && (
+            <div className="mb-2 rounded-xl border border-primary/40 bg-primary/10 p-3 text-xs text-primary shadow-[0_0_18px_color-mix(in_oklab,var(--gold)_18%,transparent)]">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 font-extrabold">
+                    <span className="live-dot" />
+                    {autoBot.source === "scanner" ? "AI position loaded" : "Bot loaded"}
+                  </div>
+                  <div className="mt-1 truncate text-muted-foreground">
+                    {autoBot.label} / {MARKETS[autoBot.market].label} / {autoBot.direction}
+                  </div>
+                  <div className="mt-1 font-mono text-[11px] text-muted-foreground">
+                    Auto trades:{" "}
+                    {((autoBot.ticks * MARKETS[autoBot.market].intervalMs) / 1000).toFixed(1)}s each
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={stopAutoTrading}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-bear/50 bg-bear/15 px-3 py-2 font-bold text-bear transition hover:bg-bear/25"
+                >
+                  <StopCircle className="h-4 w-4" />
+                  Stop
+                </button>
               </div>
             </div>
           )}
-          {showDigitPicker && (
-            <>
-              <div className="text-[10px] uppercase text-muted-foreground text-center font-bold tracking-wider">
-                Select digit (0-9)
-              </div>
-              <div className="grid grid-cols-10 gap-1">
-                {Array.from({ length: 10 }).map((_, d) => (
-                  <button
-                    key={d}
-                    onClick={() => setSelectedDigit(d)}
-                    className={
-                      "h-9 rounded-full font-bold text-sm border-2 " +
-                      (selectedDigit === d
-                        ? "bg-primary text-primary-foreground border-primary glow-primary"
-                        : "bg-surface border-border")
-                    }
-                  >
-                    {d}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      )}
 
-      {/* Mode */}
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          onClick={() => setBotMode(false)}
-          disabled={botRunning}
-          className={
-            "py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 " +
-            (!botMode
-              ? "bg-primary text-primary-foreground glow-primary"
-              : "bg-card border border-border text-muted-foreground")
-          }
-        >
-          <User className="h-4 w-4" /> Manual Trading
-        </button>
-        <button
-          onClick={() => setBotMode(true)}
-          disabled={botRunning}
-          className={
-            "py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 " +
-            (botMode
-              ? "bg-primary text-primary-foreground glow-primary"
-              : "bg-card border border-border text-muted-foreground")
-          }
-        >
-          <Bot className="h-4 w-4" /> Smart Trading Bot
-        </button>
-      </div>
-
-      {/* Stake */}
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => setStake(Math.max(1, stake - 1))}
-          className="h-12 w-12 rounded-xl bg-surface border border-border grid place-items-center"
-        >
-          <Minus />
-        </button>
-        <div className="flex-1 bg-card border-2 border-primary rounded-xl py-2 text-center">
-          <div className="text-[10px] uppercase text-muted-foreground tracking-wider">Stake $</div>
-          <div className="text-2xl font-extrabold tabular-nums">{stake}</div>
-        </div>
-        <button
-          onClick={() => setStake(stake + 1)}
-          className="h-12 w-12 rounded-xl bg-surface border border-border grid place-items-center"
-        >
-          <Plus />
-        </button>
-      </div>
-
-      <div className="grid grid-cols-6 gap-1.5">
-        {QUICK.map((q) => (
-          <button
-            key={q}
-            onClick={() => setStake(q)}
-            className={
-              "py-1.5 rounded-lg border text-xs font-bold " +
-              (stake === q
-                ? "bg-primary/20 border-primary text-primary"
-                : "bg-card border-border text-muted-foreground")
-            }
-          >
-            ${q}
-          </button>
-        ))}
-      </div>
-
-      {botMode && (
-        <div className="grid grid-cols-3 gap-2">
-          <BotField
-            label="Target profit"
-            prefix="$"
-            value={target}
-            onChange={setTarget}
-            accent="text-bull"
-          />
-          <BotField
-            label="Stop loss"
-            prefix="$"
-            value={stop}
-            onChange={setStop}
-            accent="text-bear"
-          />
-          <BotField
-            label="Multiplier"
-            prefix="x"
-            value={martingale}
-            onChange={setMartingale}
-            accent="text-primary"
-          />
-        </div>
-      )}
-
-      {/* Action buttons */}
-      {botRunning ? (
-        <button
-          onClick={stopBot}
-          className="w-full py-4 rounded-2xl bg-bear text-bear-foreground font-extrabold text-lg glow-bear flex items-center justify-center gap-2"
-        >
-          <Square className="h-5 w-5" /> STOP BOT · session ${sessionPnLRef.current.toFixed(2)}
-        </button>
-      ) : (
-        <div className="grid grid-cols-2 gap-2 pt-1">
-          {botMode && (
-            <button
-              onClick={() => startBot("AUTO")}
-              className="col-span-2 py-4 rounded-2xl bg-primary text-primary-foreground font-extrabold text-lg glow-primary"
+          {/* Mobile-only pending/last outcome banner */}
+          {(pendingTrade || lastOutcome) && (
+            <div
+              className={`mb-2 flex items-center justify-between rounded-lg border px-3 py-2 text-xs lg:hidden ${
+                pendingTrade
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : lastOutcome?.won
+                    ? "border-bull/40 bg-bull/10 text-bull"
+                    : "border-bear/40 bg-bear/10 text-bear"
+              }`}
             >
-              AUTO TRADE
-            </button>
+              <span className="flex items-center gap-2">
+                <span className="live-dot" />
+                {pendingTrade
+                  ? `Contract running · ${secondsLeft}s`
+                  : lastOutcome?.won
+                    ? "✓ Won last trade"
+                    : "✗ Lost last trade"}
+              </span>
+              <span className="font-mono">
+                {openTrades.length} open · {closedTrades.length} closed
+              </span>
+            </div>
           )}
-          {actions.map(([label, tone]) => (
-            <button
-              key={label}
-              onClick={() => (botMode ? startBot(label) : fireManual(label))}
-              className={
-                "py-4 rounded-2xl font-extrabold text-lg tracking-wide " +
-                (tone === "bull"
-                  ? "bg-bull text-bull-foreground glow-bull"
-                  : "bg-bear text-bear-foreground glow-bear")
-              }
-            >
-              {botMode ? `BOT ${label}` : label} {tone === "bull" ? "↑" : "↓"}
-            </button>
-          ))}
+          <TradeConfig
+            contractType={contractType}
+            onContract={setContractType}
+            direction={direction}
+            onDirection={setDirection}
+            mode={mode}
+            onMode={setMode}
+            stakeMode={stakeMode}
+            onStakeMode={setStakeMode}
+            stake={stake}
+            onStake={setStake}
+            targetProfit={targetProfit}
+            onTargetProfit={setTargetProfit}
+            targetLoss={targetLoss}
+            onTargetLoss={setTargetLoss}
+            lossMultiple={lossMultiple}
+            onLossMultiple={setLossMultiple}
+            digit={digit}
+            onDigit={setDigit}
+            ticks={ticks}
+            onTicks={setTicks}
+            contract={contract}
+            potentialPayoutCents={potentialPayoutCents}
+            onPlace={handlePlace}
+            placing={placing || !!pendingTrade}
+            pending={!!pendingTrade}
+            mult={mult}
+            contractType_={contractType}
+          />
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
-function profitRateForContract(type: TradeType, direction: string) {
-  if (type === "Buy/Sell" || type === "Even/Odd") return 0.7;
-  if (type === "Matches/Differs") return direction === "MATCH" ? 4 : 0.06;
-  return DEFAULT_WIN_PROFIT_RATE;
+function normalizePlacedTradeId(value: unknown): string | null {
+  if (!value) return null;
+  if (Array.isArray(value)) return normalizePlacedTradeId(value[0]);
+  if (typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.id === "string") return record.id;
+  return normalizePlacedTradeId(record.trade ?? record.data ?? null);
 }
 
-function BotField({
+function readLoadedAutoBot(): LoadedAutoBot | null {
+  if (typeof window === "undefined") return null;
+  const legacyKey = "megaflip-scanner-bot";
+  const key = "digittrader-scanner-bot";
+  const raw = window.sessionStorage.getItem(key) ?? window.sessionStorage.getItem(legacyKey);
+  if (!raw) return null;
+  if (!window.sessionStorage.getItem(key)) {
+    window.sessionStorage.setItem(key, raw);
+    window.sessionStorage.removeItem(legacyKey);
+  }
+
+  try {
+    const data = JSON.parse(raw) as Record<string, unknown>;
+    if (!data.autotrade) return null;
+
+    const market = mapLoadedMarket(data.market, data.volatility);
+    const contractType = mapLoadedContract(data.category);
+    const contract = contractFor(contractType);
+    const direction = mapLoadedDirection(data.direction, contractType);
+    const fallbackDirection = contract.directions[0].key as Direction;
+    const source = data.source === "builder" ? "builder" : "scanner";
+    const stake = Math.max(0.35, Number(data.stake ?? 10));
+    const digit = Number.isFinite(Number(data.digit))
+      ? Math.max(0, Math.min(9, Number(data.digit)))
+      : null;
+
+    return {
+      source,
+      label:
+        typeof data.name === "string" && data.name.trim()
+          ? data.name.trim()
+          : source === "scanner"
+            ? "AI scanner setup"
+            : "Builder bot",
+      market,
+      contractType,
+      direction: contract.directions.some((item) => item.key === direction)
+        ? direction
+        : fallbackDirection,
+      digit,
+      stake: stake.toFixed(2),
+      ticks: getAutoTradeTicks(market),
+    };
+  } catch {
+    window.sessionStorage.removeItem(key);
+    window.sessionStorage.removeItem(legacyKey);
+    return null;
+  }
+}
+
+function mapLoadedMarket(value: unknown, volatility: unknown): MarketId {
+  const text = String(value ?? "").toLowerCase();
+  const volText = String(volatility ?? "").toLowerCase();
+  const number = text.match(/100|75|50|25|10/)?.[0] ?? "10";
+  const wantsOneSecond = text.includes("1s") || volText.includes("1s");
+  const candidate = `V${number}${wantsOneSecond ? "_1S" : ""}` as MarketId;
+  if (MARKETS[candidate]) return candidate;
+
+  const byLabel = MARKET_LIST.find((market) => market.label.toLowerCase() === text);
+  return byLabel?.id ?? "V10_1S";
+}
+
+function mapLoadedContract(value: unknown): ContractType {
+  const text = String(value ?? "").toLowerCase();
+  if (
+    text.includes("buy") ||
+    text.includes("sell") ||
+    text.includes("rise") ||
+    text.includes("fall")
+  )
+    return "rise_fall";
+  if (text.includes("over") || text.includes("under")) return "over_under";
+  if (text.includes("match") || text.includes("differ")) return "matches_differs";
+  return "even_odd";
+}
+
+function mapLoadedDirection(value: unknown, contractType: ContractType): Direction {
+  const text = String(value ?? "").toLowerCase();
+  if (contractType === "rise_fall")
+    return text.includes("sell") || text.includes("fall") ? "fall" : "rise";
+  if (contractType === "over_under") return text.includes("under") ? "under" : "over";
+  if (contractType === "matches_differs") return text.includes("differ") ? "differs" : "matches";
+  return text.includes("odd") ? "odd" : "even";
+}
+
+function getAutoTradeTicks(market: MarketId) {
+  const interval = MARKETS[market].intervalMs;
+  const minTicks = Math.max(1, Math.ceil(2000 / interval));
+  const maxTicks = Math.max(minTicks, Math.floor(4000 / interval));
+  const targetTicks = Math.max(1, Math.round(3000 / interval));
+  return Math.max(minTicks, Math.min(maxTicks, targetTicks));
+}
+
+function contractWon(
+  type: ContractType,
+  direction: Direction,
+  entryPrice: number,
+  exitPrice: number,
+  digitTarget: number | null,
+  decimals: number,
+) {
+  const exitDigit = lastDigit(exitPrice, decimals);
+  const target = digitTarget ?? 0;
+  if (type === "rise_fall")
+    return direction === "rise" ? exitPrice > entryPrice : exitPrice < entryPrice;
+  if (type === "even_odd") return direction === "even" ? exitDigit % 2 === 0 : exitDigit % 2 === 1;
+  if (type === "over_under") return direction === "over" ? exitDigit > target : exitDigit < target;
+  return direction === "matches" ? exitDigit === target : exitDigit !== target;
+}
+
+/* ---------- Sub-components ---------- */
+
+function ChartTool({
+  children,
+  active,
   label,
-  prefix,
-  value,
-  onChange,
-  accent,
+  onClick,
 }: {
+  children: React.ReactNode;
   label: string;
-  prefix: string;
-  value: number;
-  onChange: (n: number) => void;
-  accent: string;
+  active?: boolean;
+  onClick?: () => void;
 }) {
   return (
-    <div className="bg-card border border-border rounded-xl p-2">
-      <div className={"text-[10px] uppercase font-bold tracking-wider mb-1 " + accent}>{label}</div>
-      <div className="flex items-center gap-1">
-        <span className={"text-sm font-bold " + accent}>{prefix}</span>
-        <input
-          type="number"
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
-          className="w-full bg-transparent text-center font-bold text-lg outline-none tabular-nums"
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+      className={`grid h-7 w-7 place-items-center rounded-md transition ${
+        active ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/* Digit strip — 10 circles with % + last-tick glow + trade-outcome glow */
+function DigitStrip({
+  currentDigit,
+  currentPrice,
+  decimals,
+  digitStats,
+  minDigit,
+  maxDigit,
+  pending,
+  lastOutcome,
+  tickOutcomes,
+}: {
+  currentDigit: number;
+  currentPrice: number;
+  decimals: number;
+  digitStats: number[];
+  minDigit: number;
+  maxDigit: number;
+  pending: PendingTrade | null;
+  lastOutcome: LastOutcome | null;
+  tickOutcomes: TickOutcome[];
+}) {
+  return (
+    <div className="shrink-0 px-2 pb-2 pt-1">
+      {/* Floating price pill above the current digit */}
+      <div className="mb-1 flex justify-center">
+        <div className="flex items-center gap-2 rounded-full border border-primary/40 bg-background/80 px-3 py-1 text-xs font-mono shadow-lg backdrop-blur">
+          <span>{formatPrice(currentPrice, decimals)}</span>
+          <span className="grid h-5 w-5 place-items-center rounded-full bg-bull text-[10px] font-bold text-bull-foreground">
+            {currentDigit}
+          </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-10 gap-1 rounded-xl border border-border bg-background/70 p-2 backdrop-blur">
+        {Array.from({ length: 10 }).map((_, d) => {
+          const isCurrent = d === currentDigit;
+          const isMin = d === minDigit;
+          const isMax = d === maxDigit;
+
+          // Glow rules:
+          //  - During a contract, the glow follows each landed tick digit.
+          //  - The final landed digit switches to green/red because it decides
+          //    the result.
+          let glow: "bull" | "bear" | "primary" | null = null;
+          const landed = [...tickOutcomes].reverse().find((outcome) => outcome.digit === d);
+          if (pending && landed) {
+            glow = landed.final ? (landed.won ? "bull" : "bear") : "primary";
+          } else if (lastOutcome && lastOutcome.digit === d) {
+            glow = lastOutcome.won ? "bull" : "bear";
+          } else if (isCurrent) {
+            glow = "primary";
+          }
+
+          const pct = digitStats[d];
+          const pctColor = isMax ? "text-bull" : isMin ? "text-bear" : "text-muted-foreground";
+
+          const ringColor =
+            glow === "bull"
+              ? "bg-bull/25 ring-2 ring-bull shadow-[0_0_18px_var(--color-bull)]"
+              : glow === "bear"
+                ? "bg-bear/25 ring-2 ring-bear shadow-[0_0_18px_var(--color-bear)]"
+                : glow === "primary"
+                  ? "bg-primary/15 ring-2 ring-primary shadow-[0_0_18px_var(--color-primary)]"
+                  : "bg-surface ring-1 ring-border";
+
+          return (
+            <div key={d} className="flex flex-col items-center gap-0.5">
+              <div
+                className={`grid h-9 w-9 place-items-center rounded-full font-mono text-sm font-bold transition-all duration-200 ${ringColor}`}
+              >
+                {d}
+              </div>
+              <div className={`font-mono text-[10px] ${pctColor}`}>{pct.toFixed(1)}%</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* Positions panel with Open / Closed / Transactions tabs */
+function PositionsPanel({
+  tab,
+  onTab,
+  openTrades,
+  closedTrades,
+  txns,
+  sessionPL,
+  sessionCount,
+  spec,
+}: {
+  tab: "open" | "closed" | "txns";
+  onTab: (t: "open" | "closed" | "txns") => void;
+  openTrades: any[];
+  closedTrades: any[];
+  txns: any[];
+  sessionPL: number;
+  sessionCount: { w: number; l: number; total: number };
+  spec: { label: string; decimals: number };
+}) {
+  const list = tab === "open" ? openTrades : tab === "closed" ? closedTrades : txns;
+
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-surface">
+      <div className="grid grid-cols-3 border-b border-border">
+        <TabBtn active={tab === "open"} onClick={() => onTab("open")}>
+          Open <span className="opacity-60">({openTrades.length})</span>
+        </TabBtn>
+        <TabBtn active={tab === "closed"} onClick={() => onTab("closed")}>
+          Closed <span className="opacity-60">({closedTrades.length})</span>
+        </TabBtn>
+        <TabBtn active={tab === "txns"} onClick={() => onTab("txns")}>
+          Transactions
+        </TabBtn>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {list.length === 0 && (
+          <div className="flex h-full min-h-[240px] items-center justify-center px-4 py-10 text-center text-sm text-muted-foreground">
+            No{" "}
+            {tab === "open"
+              ? "open contracts"
+              : tab === "closed"
+                ? "closed trades"
+                : "transactions"}{" "}
+            yet.
+          </div>
+        )}
+
+        {tab !== "txns" &&
+          list.map((t: any) => <TradeCard key={t.id} trade={t} decimals={spec.decimals} />)}
+        {tab === "txns" && list.map((tx: any) => <TxnRow key={tx.id} txn={tx} />)}
+      </div>
+
+      {/* Session footer */}
+      <div className="border-t border-border bg-background/50 px-3 py-2 text-xs">
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-1.5 text-primary">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+            Session
+          </span>
+          <span className="text-muted-foreground">
+            {sessionCount.total} trades ({sessionCount.w}W / {sessionCount.l}L)
+          </span>
+        </div>
+        <div className="mt-1 flex items-center justify-between">
+          <span className="text-muted-foreground">Session P/L:</span>
+          <span className={`font-mono font-semibold ${sessionPL >= 0 ? "text-bull" : "text-bear"}`}>
+            {sessionPL >= 0 ? "+" : ""}
+            {formatUSD(sessionPL)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TabBtn({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`border-b-2 px-3 py-3 text-xs font-medium transition ${
+        active
+          ? "border-primary text-primary"
+          : "border-transparent text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function TradeCard({ trade, decimals: _decimals }: { trade: any; decimals: number }) {
+  const won = trade.status === "won";
+  const lost = trade.status === "lost";
+  const open = trade.status === "open";
+  const pl = (trade.payout_cents ?? 0) - trade.stake_cents;
+  const contract = contractFor(trade.contract_type as ContractType);
+  const dirLabel =
+    contract.directions.find((d) => d.key === trade.direction)?.label ?? trade.direction;
+  const marketLabel = MARKETS[trade.market as MarketId]?.label ?? trade.market;
+
+  return (
+    <div className="border-b border-border px-3 py-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-2">
+          <div
+            className={`mt-0.5 grid h-6 w-6 place-items-center rounded-md ${won ? "bg-bull/20 text-bull" : lost ? "bg-bear/20 text-bear" : "bg-primary/20 text-primary"}`}
+          >
+            <TrendingUp className="h-3.5 w-3.5" />
+          </div>
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold">{marketLabel}</div>
+            <div className="text-[11px] text-muted-foreground">Index · Tick {trade.ticks}</div>
+          </div>
+        </div>
+        <span
+          className={`text-xs font-medium ${won ? "text-bull" : lost ? "text-bear" : "text-primary"}`}
+        >
+          ● {dirLabel}
+        </span>
+      </div>
+
+      {open && <div className="mt-1 text-[11px] text-primary">Contract running…</div>}
+      {!open && <div className="mt-1 text-[11px] text-muted-foreground">Trade complete</div>}
+
+      <div className="mt-2 inline-block rounded-md border border-border bg-background px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        USD
+      </div>
+
+      <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+        <Stat
+          label="Total profit/loss:"
+          value={
+            <span className={pl > 0 ? "text-bull" : pl < 0 ? "text-bear" : ""}>
+              {pl > 0 ? "+" : ""}
+              {formatUSD(pl)}
+            </span>
+          }
+        />
+        <Stat
+          label="Contract value:"
+          value={
+            <span className={pl > 0 ? "text-bull" : pl < 0 ? "text-bear" : ""}>
+              {formatUSD(trade.payout_cents ?? 0)}
+            </span>
+          }
+        />
+        <Stat label="Stake:" value={formatUSD(trade.stake_cents)} />
+        <Stat
+          label="Potential payout:"
+          value={formatUSD(Math.floor(trade.stake_cents * Number(trade.payout_multiplier)))}
         />
       </div>
     </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-muted-foreground">{label}</div>
+      <div className="font-mono font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function TxnRow({ txn }: { txn: any }) {
+  const isNeg = txn.amount_cents < 0;
+  const kind = txn.type as string;
+  const isStake = kind === "trade_stake";
+  const color = isStake ? "text-primary" : isNeg ? "text-bear" : "text-bull";
+  const iconBg = isStake ? "bg-primary/15" : isNeg ? "bg-bear/15" : "bg-bull/15";
+  const label =
+    kind === "trade_stake"
+      ? "Stake"
+      : kind === "trade_payout"
+        ? "Payout"
+        : kind === "deposit"
+          ? "Deposit"
+          : kind.replace("_", " ");
+
+  return (
+    <div className="flex items-start justify-between gap-2 border-b border-border px-3 py-3">
+      <div className="flex items-start gap-2">
+        <div className={`grid h-7 w-7 place-items-center rounded-full ${iconBg} ${color}`}>
+          <TrendingUp className="h-3.5 w-3.5 rotate-180" />
+        </div>
+        <div>
+          <div className={`text-sm font-semibold ${color}`}>{label}</div>
+          <div className="text-[11px] text-muted-foreground">
+            {new Date(txn.created_at).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            })}
+          </div>
+        </div>
+      </div>
+      <div className="text-right">
+        <div className={`font-mono text-sm font-bold ${color}`}>
+          {isNeg ? "" : "+"}
+          {formatUSD(txn.amount_cents)}
+        </div>
+        <div className="text-[10px] text-muted-foreground">
+          Bal: {formatUSD(txn.balance_after_cents)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* Right-side trade configuration panel */
+function TradeConfig({
+  contractType,
+  onContract,
+  direction: _direction,
+  onDirection: _onDirection,
+  mode,
+  onMode,
+  stakeMode,
+  onStakeMode,
+  stake,
+  onStake,
+  targetProfit,
+  onTargetProfit,
+  targetLoss,
+  onTargetLoss,
+  lossMultiple,
+  onLossMultiple,
+  digit,
+  onDigit,
+  ticks,
+  onTicks,
+  contract,
+  potentialPayoutCents,
+  onPlace,
+  placing,
+  pending,
+  mult,
+  contractType_,
+}: any) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="rounded-2xl border border-border bg-surface p-3">
+        {/* Header with contract type — word buttons */}
+        <div className="mb-3">
+          <div className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-background p-1">
+            {CONTRACTS.map((c) => {
+              const active = c.type === contractType;
+              const short =
+                c.type === "even_odd"
+                  ? "Even / Odd"
+                  : c.type === "over_under"
+                    ? "Over / Under"
+                    : c.type === "matches_differs"
+                      ? "Matches / Differs"
+                      : "Rise / Fall";
+              return (
+                <button
+                  key={c.type}
+                  onClick={() => onContract(c.type)}
+                  className={`rounded-md px-2 py-1.5 text-[11px] font-semibold transition ${
+                    active
+                      ? "bg-primary/20 text-primary ring-1 ring-primary/50"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {short}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Learn about link */}
+        <div className="mb-3 flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
+          <span>Learn about this trade type</span>
+        </div>
+
+        {/* Trade mode */}
+        <div className="mb-3 flex items-center justify-between text-xs">
+          <span className="font-medium">Trade Mode</span>
+          <span className="text-muted-foreground">Runs until target hit</span>
+        </div>
+        <div className="mb-4 grid grid-cols-2 gap-1 rounded-lg border border-border bg-background p-1">
+          <ModeBtn active={mode === "auto"} onClick={() => onMode("auto")}>
+            Auto
+          </ModeBtn>
+          <ModeBtn active={mode === "manual"} onClick={() => onMode("manual")}>
+            Manual
+          </ModeBtn>
+        </div>
+
+        {mode === "auto" && (
+          <>
+            <FieldRow
+              icon={Target}
+              label="Target Profit"
+              value={targetProfit}
+              onChange={onTargetProfit}
+              prefix="$"
+            />
+            <FieldRow
+              icon={Target}
+              label="Target Loss"
+              value={targetLoss}
+              onChange={onTargetLoss}
+              prefix="$"
+            />
+            <FieldRow
+              icon={TrendingUp}
+              label="Loss Multiple"
+              value={lossMultiple}
+              onChange={onLossMultiple}
+              prefix="x"
+            />
+          </>
+        )}
+
+        {/* Digit target for matches/differs/over/under */}
+        {contract.needsDigit && (
+          <div className="mb-3">
+            <div className="mb-1.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              {contractType_ === "over_under" ? "Barrier digit" : "Target digit"}
+            </div>
+            <div className="grid grid-cols-10 gap-1">
+              {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => onDigit(d)}
+                  className={`h-7 rounded-md font-mono text-xs font-bold transition ${
+                    digit === d
+                      ? "bg-primary text-primary-foreground"
+                      : "border border-border bg-background text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Ticks */}
+        <div className="mb-3">
+          <div className="mb-1.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+            Ticks
+          </div>
+          <div className="grid grid-cols-4 gap-1">
+            {[1, 2, 5, 10].map((t) => (
+              <button
+                key={t}
+                onClick={() => onTicks(t)}
+                className={`h-8 rounded-md text-xs font-semibold transition ${
+                  ticks === t
+                    ? "bg-primary/20 text-primary ring-1 ring-primary"
+                    : "border border-border bg-background text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t}t
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Stake / Payout tabs */}
+        <div className="mb-3 grid grid-cols-2 gap-1 rounded-lg border border-border bg-background p-1">
+          <ModeBtn active={stakeMode === "stake"} onClick={() => onStakeMode("stake")}>
+            Stake
+          </ModeBtn>
+          <ModeBtn active={stakeMode === "payout"} onClick={() => onStakeMode("payout")}>
+            Payout
+          </ModeBtn>
+        </div>
+
+        {/* Stake with +/- and AI Scanner */}
+        <div className="mb-4 flex items-stretch gap-1.5">
+          <button
+            onClick={() => onStake(String(Math.max(0.35, parseFloat(stake || "0") - 1)))}
+            className="grid w-10 place-items-center rounded-lg border border-border bg-background text-muted-foreground hover:text-foreground"
+          >
+            <Minus className="h-4 w-4" />
+          </button>
+          <div className="relative flex-1">
+            <input
+              type="number"
+              min="0.35"
+              step="0.5"
+              value={stake}
+              onChange={(e) => onStake(e.target.value)}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 pr-12 text-center font-mono text-sm font-semibold outline-none focus:border-primary"
+            />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-muted-foreground">
+              USD
+            </span>
+          </div>
+          <button
+            onClick={() => onStake(String(parseFloat(stake || "0") + 1))}
+            className="grid w-10 place-items-center rounded-lg border border-border bg-background text-muted-foreground hover:text-foreground"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+          <button
+            title="AI Scanner"
+            className="flex w-16 flex-col items-center justify-center rounded-lg border border-primary/40 bg-primary/10 text-primary transition hover:bg-primary/20"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            <span className="text-[9px] font-semibold leading-tight">AI</span>
+            <span className="text-[8px] leading-tight opacity-80">Scanner</span>
+          </button>
+        </div>
+
+        {/* Place buttons — one per direction */}
+        <div
+          className={`grid gap-2 ${contract.directions.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}
+        >
+          {contract.directions.map((d: any, i: number) => (
+            <button
+              key={d.key}
+              disabled={placing}
+              onClick={() => onPlace(d.key)}
+              className={`rounded-xl px-3 py-3 text-sm font-bold uppercase tracking-wider transition disabled:opacity-60 ${
+                pending
+                  ? "border border-border bg-background text-muted-foreground"
+                  : i === 0
+                    ? "glow-primary bg-bull text-bull-foreground hover:brightness-110"
+                    : "bg-bear text-bear-foreground hover:brightness-110"
+              }`}
+            >
+              {pending ? "■ Running" : `▶ ${d.label}`}
+            </button>
+          ))}
+        </div>
+
+        {/* Payout */}
+        <div className="mt-3 flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">Payout</span>
+          <span className="font-mono font-semibold">
+            {formatUSD(potentialPayoutCents)} <span className="text-muted-foreground">USD</span>
+          </span>
+        </div>
+
+        {/* Outcome bar */}
+        <div className="mt-2 flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">
+          <span className="grid h-5 w-5 place-items-center rounded-full bg-bear/20 text-bear text-[9px] font-bold">
+            {contract.directions[1]?.label[0] ?? "?"}
+          </span>
+          <span className="text-xs font-medium">{contract.directions[1]?.label ?? "—"}</span>
+          <div className="ml-auto flex items-center gap-2">
+            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-2">
+              <div
+                className="h-full rounded-full bg-bear"
+                style={{ width: `${Math.min(100, 100 / mult).toFixed(0)}%` }}
+              />
+            </div>
+            <span className="font-mono text-xs text-bear">{(100 / mult).toFixed(2)}%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModeBtn({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-md py-1.5 text-xs font-semibold transition ${
+        active
+          ? "bg-primary text-primary-foreground"
+          : "text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function FieldRow({
+  icon: Icon,
+  label,
+  value,
+  onChange,
+  prefix,
+}: {
+  icon: any;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  prefix: string;
+}) {
+  return (
+    <div className="mb-3">
+      <div className="mb-1 flex items-center gap-1.5 text-xs">
+        <Icon className="h-3.5 w-3.5 text-primary" />
+        <span className="font-medium">{label}</span>
+      </div>
+      <div className="relative">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+          {prefix}
+        </span>
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 pl-7 font-mono text-sm outline-none focus:border-primary"
+        />
+      </div>
+    </div>
+  );
+}
+
+/* Candlestick shape for recharts <Bar dataKey="range" /> where range = [low, high]. */
+function CandleShape(props: any) {
+  const { x, y, width, height, payload } = props;
+  if (!payload || width == null || height == null) return null;
+  const { o, h, l, c } = payload;
+  const up = c >= o;
+  const color = up ? "oklch(0.72 0.19 150)" : "oklch(0.65 0.22 25)";
+  const priceRange = h - l || 1;
+  const pxPerPrice = height / priceRange;
+  const bodyTop = y + (h - Math.max(o, c)) * pxPerPrice;
+  const bodyBottom = y + (h - Math.min(o, c)) * pxPerPrice;
+  const bodyHeight = Math.max(1, bodyBottom - bodyTop);
+  const wickX = x + width / 2;
+  const bodyW = Math.max(2, width * 0.75);
+  const bodyX = x + (width - bodyW) / 2;
+  return (
+    <g>
+      <line x1={wickX} x2={wickX} y1={y} y2={y + height} stroke={color} strokeWidth={1} />
+      <rect x={bodyX} y={bodyTop} width={bodyW} height={bodyHeight} fill={color} stroke={color} />
+    </g>
   );
 }

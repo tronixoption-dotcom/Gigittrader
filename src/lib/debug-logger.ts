@@ -12,6 +12,8 @@ export interface DebugEvent {
 
 const STORAGE_KEY = "digittrader.debug.events";
 const ENABLED_KEY = "digittrader.debug.enabled";
+const LEGACY_STORAGE_KEY = "megaflip.debug.events";
+const LEGACY_ENABLED_KEY = "megaflip.debug.enabled";
 const MAX_EVENTS = 250;
 const REDACT_KEYS = ["password", "passkey", "token", "authorization", "credential", "secret"];
 
@@ -43,7 +45,8 @@ export function logDebugEvent(level: DebugLevel, scope: string, message: string,
 export function getDebugEvents(): DebugEvent[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw =
+      window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(LEGACY_STORAGE_KEY);
     return raw ? (JSON.parse(raw) as DebugEvent[]) : [];
   } catch {
     return [];
@@ -53,18 +56,27 @@ export function getDebugEvents(): DebugEvent[] {
 export function clearDebugEvents() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(STORAGE_KEY);
+  window.localStorage.removeItem(LEGACY_STORAGE_KEY);
   window.dispatchEvent(new CustomEvent("digittrader-debug-log-cleared"));
 }
 
 export function setDebugLoggingEnabled(enabled: boolean) {
   if (typeof window === "undefined") return;
-  if (enabled) window.localStorage.setItem(ENABLED_KEY, "1");
-  else window.localStorage.removeItem(ENABLED_KEY);
+  if (enabled) {
+    window.localStorage.setItem(ENABLED_KEY, "1");
+    window.localStorage.removeItem(LEGACY_ENABLED_KEY);
+  } else {
+    window.localStorage.removeItem(ENABLED_KEY);
+    window.localStorage.removeItem(LEGACY_ENABLED_KEY);
+  }
 }
 
 function isDebugLoggingEnabled() {
   if (typeof window === "undefined") return true;
-  return window.localStorage.getItem(ENABLED_KEY) === "1";
+  return (
+    window.localStorage.getItem(ENABLED_KEY) === "1" ||
+    window.localStorage.getItem(LEGACY_ENABLED_KEY) === "1"
+  );
 }
 
 export function serializeError(error: unknown) {

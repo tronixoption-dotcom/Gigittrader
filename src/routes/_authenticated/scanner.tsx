@@ -53,8 +53,10 @@ function ScannerPage() {
     window.sessionStorage.setItem(
       "digittrader-scanner-bot",
       JSON.stringify({
+        source: "scanner",
         category: cat,
         market: result.bestMarket,
+        direction: result.bias,
         bias: result.bias,
         edge: result.edge,
         autotrade: true,
@@ -65,7 +67,7 @@ function ScannerPage() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="min-h-full w-full space-y-4 overflow-y-auto p-4 pb-28 lg:pb-4">
       <div className="flex items-start gap-3">
         <div className="h-12 w-12 rounded-xl bg-primary/15 text-primary grid place-items-center glow-primary border border-primary/40">
           <Crosshair className="h-6 w-6" />

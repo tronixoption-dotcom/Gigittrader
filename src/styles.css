@@ -5,8 +5,8 @@
 @custom-variant dark (&:is(.dark, .dark *));
 @custom-variant light (&:is(.light, .light *));
 
-/* Digit Trader Design System — Obsidian + Champagne Gold
- * Premium fintech feel. Gold accent (#C8A24B), mint bull, crimson bear.
+/* Digit Trader Design System — Forest + Emerald
+ * Premium fintech feel. Emerald accent, mint bull, crimson bear.
  * Supports light + dark themes via .light / .dark class on <html>.
  */
 
@@ -63,96 +63,100 @@
   --shadow-glow-bear: 0 0 18px color-mix(in oklab, var(--bear) 55%, transparent);
 }
 
-/* ---------- DARK (default) — obsidian + champagne gold ---------- */
-:root, .dark {
+/* ---------- DARK (default) — deep forest + emerald ---------- */
+:root,
+.dark {
   --radius: 0.75rem;
 
-  --background: oklch(0.13 0.012 250);
-  --foreground: oklch(0.96 0.008 80);
-  --surface: oklch(0.17 0.014 250);
-  --surface-2: oklch(0.21 0.016 250);
+  --background: oklch(0.12 0.025 162);
+  --foreground: oklch(0.96 0.015 150);
+  --surface: oklch(0.16 0.03 162);
+  --surface-2: oklch(0.2 0.035 162);
 
-  --card: oklch(0.17 0.014 250);
-  --card-foreground: oklch(0.96 0.008 80);
-  --popover: oklch(0.19 0.016 250);
-  --popover-foreground: oklch(0.96 0.008 80);
+  --card: oklch(0.16 0.03 162);
+  --card-foreground: oklch(0.96 0.015 150);
+  --popover: oklch(0.18 0.035 162);
+  --popover-foreground: oklch(0.96 0.015 150);
 
-  /* Champagne gold accent */
-  --gold: oklch(0.78 0.13 86);
-  --gold-soft: oklch(0.86 0.09 88);
-  --primary: oklch(0.78 0.13 86);
-  --primary-foreground: oklch(0.13 0.012 250);
-  --primary-glow: oklch(0.86 0.09 88);
+  /* Emerald brand accent */
+  --gold: oklch(0.76 0.18 155);
+  --gold-soft: oklch(0.86 0.12 155);
+  --primary: oklch(0.72 0.19 155);
+  --primary-foreground: oklch(0.12 0.025 162);
+  --primary-glow: oklch(0.84 0.15 155);
 
   --bull: oklch(0.76 0.18 152);
   --bull-foreground: oklch(0.12 0.02 160);
   --bear: oklch(0.66 0.24 22);
   --bear-foreground: oklch(0.98 0.005 240);
 
-  --secondary: oklch(0.24 0.018 250);
-  --secondary-foreground: oklch(0.96 0.008 80);
-  --muted: oklch(0.22 0.014 250);
-  --muted-foreground: oklch(0.66 0.018 250);
-  --accent: oklch(0.28 0.03 90);
-  --accent-foreground: oklch(0.96 0.008 80);
+  --secondary: oklch(0.23 0.035 162);
+  --secondary-foreground: oklch(0.96 0.015 150);
+  --muted: oklch(0.21 0.03 162);
+  --muted-foreground: oklch(0.68 0.035 155);
+  --accent: oklch(0.27 0.06 155);
+  --accent-foreground: oklch(0.96 0.015 150);
 
   --destructive: oklch(0.66 0.24 22);
   --destructive-foreground: oklch(0.98 0.005 240);
 
-  --border: oklch(0.26 0.014 250);
-  --border-strong: oklch(0.40 0.04 90);
-  --input: oklch(0.22 0.014 250);
-  --ring: oklch(0.78 0.13 86);
+  --border: oklch(0.27 0.035 162);
+  --border-strong: oklch(0.42 0.09 155);
+  --input: oklch(0.21 0.03 162);
+  --ring: oklch(0.72 0.19 155);
 
-  --chart-1: oklch(0.78 0.13 86);
+  --chart-1: oklch(0.72 0.19 155);
   --chart-2: oklch(0.76 0.18 152);
   --chart-3: oklch(0.66 0.24 22);
   --chart-4: oklch(0.72 0.16 240);
-  --chart-5: oklch(0.65 0.20 305);
+  --chart-5: oklch(0.65 0.2 305);
 }
 
-/* ---------- LIGHT — warm ivory + deep gold ---------- */
+/* ---------- LIGHT — soft sage + deep emerald ---------- */
 .light {
-  --background: oklch(0.985 0.008 85);
-  --foreground: oklch(0.18 0.015 250);
-  --surface: oklch(0.965 0.012 85);
-  --surface-2: oklch(0.94 0.014 85);
+  --background: oklch(0.98 0.018 155);
+  --foreground: oklch(0.2 0.035 162);
+  --surface: oklch(0.95 0.025 155);
+  --surface-2: oklch(0.92 0.035 155);
 
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.015 250);
+  --card-foreground: oklch(0.2 0.035 162);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.015 250);
+  --popover-foreground: oklch(0.2 0.035 162);
 
-  --gold: oklch(0.62 0.14 80);
-  --gold-soft: oklch(0.72 0.13 84);
-  --primary: oklch(0.55 0.13 80);
-  --primary-foreground: oklch(0.98 0.005 80);
-  --primary-glow: oklch(0.72 0.13 84);
+  --gold: oklch(0.55 0.17 155);
+  --gold-soft: oklch(0.68 0.16 155);
+  --primary: oklch(0.5 0.16 155);
+  --primary-foreground: oklch(0.98 0.01 155);
+  --primary-glow: oklch(0.68 0.16 155);
 
   --bull: oklch(0.58 0.18 152);
   --bull-foreground: oklch(0.98 0.005 160);
   --bear: oklch(0.56 0.24 22);
   --bear-foreground: oklch(0.98 0.005 240);
 
-  --secondary: oklch(0.92 0.012 85);
-  --secondary-foreground: oklch(0.18 0.015 250);
-  --muted: oklch(0.93 0.01 85);
-  --muted-foreground: oklch(0.45 0.018 250);
-  --accent: oklch(0.90 0.04 85);
-  --accent-foreground: oklch(0.18 0.015 250);
+  --secondary: oklch(0.9 0.03 155);
+  --secondary-foreground: oklch(0.2 0.035 162);
+  --muted: oklch(0.91 0.025 155);
+  --muted-foreground: oklch(0.42 0.04 162);
+  --accent: oklch(0.87 0.06 155);
+  --accent-foreground: oklch(0.2 0.035 162);
 
   --destructive: oklch(0.56 0.24 22);
   --destructive-foreground: oklch(0.98 0.005 240);
 
-  --border: oklch(0.88 0.012 85);
-  --border-strong: oklch(0.70 0.10 84);
-  --input: oklch(0.93 0.01 85);
-  --ring: oklch(0.55 0.13 80);
+  --border: oklch(0.84 0.035 155);
+  --border-strong: oklch(0.66 0.12 155);
+  --input: oklch(0.91 0.025 155);
+  --ring: oklch(0.5 0.16 155);
 }
 
 @layer base {
-  * { border-color: var(--color-border); }
-  html, body {
+  * {
+    border-color: var(--color-border);
+  }
+  html,
+  body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-variant-numeric: tabular-nums;
@@ -160,16 +164,32 @@
   }
   body {
     background-image:
-      radial-gradient(ellipse 80% 50% at 50% -10%, color-mix(in oklab, var(--gold) 18%, transparent), transparent 60%),
-      radial-gradient(ellipse 60% 40% at 100% 100%, color-mix(in oklab, var(--primary) 14%, transparent), transparent 60%);
+      radial-gradient(
+        ellipse 80% 50% at 50% -10%,
+        color-mix(in oklab, var(--gold) 18%, transparent),
+        transparent 60%
+      ),
+      radial-gradient(
+        ellipse 60% 40% at 100% 100%,
+        color-mix(in oklab, var(--primary) 14%, transparent),
+        transparent 60%
+      );
     background-attachment: fixed;
   }
 }
 
-@utility glow-primary { box-shadow: var(--shadow-glow-primary); }
-@utility glow-gold { box-shadow: var(--shadow-glow-gold); }
-@utility glow-bull { box-shadow: var(--shadow-glow-bull); }
-@utility glow-bear { box-shadow: var(--shadow-glow-bear); }
+@utility glow-primary {
+  box-shadow: var(--shadow-glow-primary);
+}
+@utility glow-gold {
+  box-shadow: var(--shadow-glow-gold);
+}
+@utility glow-bull {
+  box-shadow: var(--shadow-glow-bull);
+}
+@utility glow-bear {
+  box-shadow: var(--shadow-glow-bear);
+}
 
 @utility pill-tab {
   border: 1px solid var(--color-border-strong);
@@ -188,8 +208,15 @@
 }
 
 @keyframes pulse-dot {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(1.4); }
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.4);
+  }
 }
 @utility live-dot {
   display: inline-block;
@@ -201,14 +228,96 @@
 }
 
 @keyframes plane-bob {
-  0%, 100% { transform: translateY(0) rotate(-12deg); }
-  50% { transform: translateY(-4px) rotate(-10deg); }
+  0%,
+  100% {
+    transform: translateY(0) rotate(-12deg);
+  }
+  50% {
+    transform: translateY(-4px) rotate(-10deg);
+  }
 }
-@utility plane-fly { animation: plane-bob 1.6s ease-in-out infinite; }
+@utility plane-fly {
+  animation: plane-bob 1.6s ease-in-out infinite;
+}
+
+/* Admin console follows the same theme preference as the main application. */
+.admin-console.light {
+  --background: #effcfc;
+  --foreground: #0b1930;
+  --surface: #e7f8fa;
+  --surface-2: #dff3f6;
+  --card: #f6ffff;
+  --card-foreground: #0b1930;
+  --border: #c3e4e9;
+  --muted-foreground: #315c72;
+  --primary: #159957;
+  --primary-foreground: #ffffff;
+  --bull: #159957;
+  --bear: #e32635;
+}
+.admin-console.dark {
+  background: oklch(0.13 0.012 250) !important;
+  color: oklch(0.96 0.008 80) !important;
+}
+.admin-console.dark aside,
+.admin-console.dark header {
+  background: oklch(0.17 0.014 250) !important;
+  border-color: oklch(0.26 0.014 250) !important;
+}
+.admin-console.dark [class*="bg-white"] {
+  background: color-mix(in oklab, oklch(0.17 0.014 250) 92%, transparent) !important;
+}
+.admin-console.dark [class*="text-[#315c72]"] {
+  color: oklch(0.72 0.03 210) !important;
+}
+.admin-console.dark [class*="border-[#"] {
+  border-color: oklch(0.3 0.03 210) !important;
+}
 
 @keyframes digit-flash {
-  0% { transform: scale(1); }
-  40% { transform: scale(1.25); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
-@utility digit-pop { animation: digit-flash 0.45s ease-out; }
+@utility digit-pop {
+  animation: digit-flash 0.45s ease-out;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Safer scrollbar handling: hide scrollbars visually but preserve scrolling.   */
+/* Keeps content accessible while removing visible scrollbars across browsers. */
+/* Use per-component layout fixes if you want to eliminate overflow completely. */
+/* -------------------------------------------------------------------------- */
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+/* Hide scrollbars in WebKit/Blink but preserve scroll behavior */
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Allow main app containers to scroll if content overflows, with smooth touch scrolling */
+.app-root,
+.router-outlet,
+main {
+  min-height: 100vh;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}

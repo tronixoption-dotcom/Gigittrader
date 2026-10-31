@@ -18,7 +18,7 @@ type ProfileWithPhone = {
 };
 
 export const Route = createFileRoute("/_authenticated/profile")({
-  head: () => ({ meta: [{ title: "Profile — DIGIT TRADER" }] }),
+  head: () => ({ meta: [{ title: "Profile — Digit Trader" }] }),
   errorComponent: RouteError,
   notFoundComponent: RouteNotFound,
   component: ProfilePage,
@@ -123,7 +123,7 @@ function ProfilePage() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="w-full h-full overflow-y-auto space-y-4 p-4">
       <div className="bg-card border border-border rounded-2xl p-3 flex items-center gap-3">
         <div className="h-12 w-12 rounded-full bg-primary/15 grid place-items-center text-primary font-extrabold text-lg">
           {(fullName || email || "?").slice(0, 1).toUpperCase()}

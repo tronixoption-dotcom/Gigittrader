@@ -75,13 +75,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { name: "theme-color", content: "#0f1014" },
-      { title: "DIGIT TRADER — Premium trading workspace" },
-      { name: "description", content: "DIGIT TRADER: Real Forex, in-house binaries, Polymarket-style predictions, Aviator, and an AI Market Scanner — one premium trading workspace." },
-      { name: "author", content: "DIGIT TRADER" },
-      { property: "og:title", content: "DIGIT TRADER — Premium trading workspace" },
-      { property: "og:description", content: "Trade Forex, Binaries, Predict markets, and Aviator with an AI Market Scanner." },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
+      { name: "theme-color", content: "#123b2a" },
+      { title: "Digit Trader — Premium trading workspace" },
+      {
+        name: "description",
+        content:
+          "Digit Trader: Real Forex, in-house binaries, market predictions, Aviator, and an AI Market Scanner — one premium trading workspace.",
+      },
+      { name: "author", content: "Digit Trader" },
+      { property: "og:title", content: "Digit Trader — Premium trading workspace" },
+      {
+        property: "og:description",
+        content: "Trade Forex, Binaries, Predict markets, and Aviator with an AI Market Scanner.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -128,7 +135,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <Outlet />
-      <Toaster position="top-center" richColors />
+      <Toaster position="top-center" richColors closeButton duration={3500} visibleToasts={3} />
     </QueryClientProvider>
   );
 }

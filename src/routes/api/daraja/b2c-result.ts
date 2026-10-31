@@ -97,12 +97,31 @@ async function findB2cPaymentRequest(
       .eq("request_type", "b2c")
       .order("created_at", { ascending: false })
       .limit(100);
-    const match = (data ?? []).find((row: { transaction_id?: string; request_payload?: Record<string, unknown> }) => {
-      const occasion = getString(row.request_payload?.Occasion);
-      return row.transaction_id?.toLowerCase().startsWith(transactionRef) ||
-        parseDigitRef(occasion) === transactionRef;
-    });
+    const match = (data ?? []).find(
+      (row: { transaction_id?: string; request_payload?: Record<string, unknown> }) => {
+        const occasion = getString(row.request_payload?.Occasion);
+        return (
+          row.transaction_id?.toLowerCase().startsWith(transactionRef) ||
+          parseDigitTraderRef(occasion) === transactionRef
+        );
+      },
+    );
     if (match) return match;
+  }
+
+  // Fallback: if we still don't have a payment_request, try to locate the
+  // transaction directly by the provider reference (first 8 hex chars of UUID)
+  if (transactionRef) {
+    const { data: tx } = await supabaseAdmin
+      .from("transactions")
+      .select("id")
+      .ilike("id", `${transactionRef}%`)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (tx && (tx as any).id) {
+      return { id: null, transaction_id: (tx as any).id, request_payload: null } as any;
+    }
   }
 
   return null;
@@ -110,7 +129,7 @@ async function findB2cPaymentRequest(
 
 function extractTransactionRef(result: Record<string, unknown>) {
   const direct = getString(result.Occasion) ?? getString(result.OriginatorConversationID);
-  const fromDirect = parseDigitRef(direct);
+  const fromDirect = parseDigitTraderRef(direct);
   if (fromDirect) return fromDirect;
 
   const referenceData = getRecord(result.ReferenceData);
@@ -119,14 +138,14 @@ function extractTransactionRef(result: Record<string, unknown>) {
   for (const raw of items) {
     const row = getRecord(raw);
     const value = getString(row.Value) ?? getString(row.value);
-    const ref = parseDigitRef(value);
+    const ref = parseDigitTraderRef(value);
     if (ref) return ref;
   }
   return undefined;
 }
 
-function parseDigitRef(value?: string) {
-  const match = value?.match(/DIGIT-([0-9a-f]{8})/i);
+function parseDigitTraderRef(value?: string) {
+  const match = value?.match(/(?:DIGITTRADER|MEGAFLIP)-([0-9a-f]{8})/i);
   return match?.[1]?.toLowerCase();
 }
 
