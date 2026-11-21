@@ -63,19 +63,19 @@
   --shadow-glow-bear: 0 0 18px color-mix(in oklab, var(--bear) 55%, transparent);
 }
 
-/* ---------- DARK (default) — deep forest + emerald ---------- */
+/* ---------- DARK (default) — near-black + emerald ---------- */
 :root,
 .dark {
   --radius: 0.75rem;
 
-  --background: oklch(0.12 0.025 162);
+  --background: oklch(0.075 0.018 162);
   --foreground: oklch(0.96 0.015 150);
-  --surface: oklch(0.16 0.03 162);
-  --surface-2: oklch(0.2 0.035 162);
+  --surface: oklch(0.105 0.022 162);
+  --surface-2: oklch(0.14 0.026 162);
 
-  --card: oklch(0.16 0.03 162);
+  --card: oklch(0.095 0.02 162);
   --card-foreground: oklch(0.96 0.015 150);
-  --popover: oklch(0.18 0.035 162);
+  --popover: oklch(0.12 0.024 162);
   --popover-foreground: oklch(0.96 0.015 150);
 
   /* Emerald brand accent */
@@ -90,19 +90,19 @@
   --bear: oklch(0.66 0.24 22);
   --bear-foreground: oklch(0.98 0.005 240);
 
-  --secondary: oklch(0.23 0.035 162);
+  --secondary: oklch(0.15 0.026 162);
   --secondary-foreground: oklch(0.96 0.015 150);
-  --muted: oklch(0.21 0.03 162);
+  --muted: oklch(0.14 0.024 162);
   --muted-foreground: oklch(0.68 0.035 155);
-  --accent: oklch(0.27 0.06 155);
+  --accent: oklch(0.19 0.055 155);
   --accent-foreground: oklch(0.96 0.015 150);
 
   --destructive: oklch(0.66 0.24 22);
   --destructive-foreground: oklch(0.98 0.005 240);
 
-  --border: oklch(0.27 0.035 162);
-  --border-strong: oklch(0.42 0.09 155);
-  --input: oklch(0.21 0.03 162);
+  --border: oklch(0.2 0.025 162);
+  --border-strong: oklch(0.34 0.075 155);
+  --input: oklch(0.14 0.024 162);
   --ring: oklch(0.72 0.19 155);
 
   --chart-1: oklch(0.72 0.19 155);
@@ -166,12 +166,12 @@
     background-image:
       radial-gradient(
         ellipse 80% 50% at 50% -10%,
-        color-mix(in oklab, var(--gold) 18%, transparent),
+        color-mix(in oklab, var(--primary) 10%, transparent),
         transparent 60%
       ),
       radial-gradient(
         ellipse 60% 40% at 100% 100%,
-        color-mix(in oklab, var(--primary) 14%, transparent),
+        color-mix(in oklab, var(--bull) 7%, transparent),
         transparent 60%
       );
     background-attachment: fixed;
